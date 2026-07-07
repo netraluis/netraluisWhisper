@@ -32,11 +32,14 @@
       .row { display: flex; gap: 14px; flex-wrap: wrap; }
       .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
       .field label { font-size: 12px; color: var(--muted); }
-      select {
+      select, input[type=password] {
         background: #101114; color: var(--fg); border: 1px solid var(--line);
         border-radius: 8px; padding: 9px 10px; font-size: 14px; width: 100%;
       }
       select:disabled { opacity: .5; }
+      .keyrow { display: flex; gap: 8px; align-items: center; }
+      .keyrow input { flex: 1; }
+      .keyok { font-size: 12px; color: #37c871; margin-top: 8px; min-height: 16px; }
       .keywarn { font-size: 12px; color: var(--accent); margin-top: 8px; min-height: 16px; }
       .saved { font-size: 12px; color: #37c871; margin-top: 8px; min-height: 16px; }
       .stats { display: flex; gap: 26px; flex-wrap: wrap; }
@@ -101,6 +104,14 @@
             </select>
           </div>
         </div>
+        <div class="field" style="margin-top:14px">
+          <label>API key de <span id="keyProviderName">openai</span></label>
+          <div class="keyrow">
+            <input id="apiKey" type="password" placeholder="pega tu API key aquí" autocomplete="off" />
+            <button class="btn" onclick="saveKey()">Guardar</button>
+          </div>
+          <div class="keyok" id="keyStatus"></div>
+        </div>
         <div class="keywarn" id="keywarn"></div>
         <div class="saved" id="saved"></div>
       </div>
@@ -158,9 +169,33 @@
       }
 
       function updateKeyWarn(provider) {
-        const w = document.getElementById('keywarn')
         const present = (providers[provider] || {}).keyPresent
-        w.textContent = present ? '' : `Falta la API key de ${provider} en tu .env`
+        document.getElementById('keyProviderName').textContent = provider
+        document.getElementById('keywarn').textContent = present
+          ? ''
+          : `Falta la API key de ${provider} — pégala aquí abajo`
+        document.getElementById('keyStatus').textContent = present ? 'Key guardada ✓' : ''
+        document.getElementById('apiKey').value = ''
+      }
+
+      async function saveKey() {
+        const provider = document.getElementById('provider').value
+        const key = document.getElementById('apiKey').value.trim()
+        if (!key) return
+        const res = await fetch('/api/keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, key }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok) {
+          if (data.providers) providers = data.providers
+          document.getElementById('apiKey').value = ''
+          updateKeyWarn(provider)
+          toast('API key guardada en Keychain')
+        } else {
+          toast('Error: ' + (data.error || res.status))
+        }
       }
 
       async function saveSettings() {

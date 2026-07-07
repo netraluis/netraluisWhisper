@@ -8,6 +8,7 @@ export interface ServerApi {
   getSettings: () => Settings
   setSettings: (s: Settings) => void
   getProviders: () => Record<string, { models: string[]; keyPresent: boolean }>
+  setKey: (provider: string, key: string) => void
   repaste: (text: string) => void
 }
 
@@ -43,6 +44,23 @@ export function startServer(port: number, api: ServerApi): Promise<void> {
     }
     api.setSettings({ provider, model, language: language || 'es' })
     res.json({ ok: true, settings: api.getSettings() })
+  })
+
+  // Store an API key (encrypted via Keychain). The key value is write-only —
+  // it is never returned by any endpoint. getProviders only reports keyPresent.
+  server.post('/api/keys', (req, res) => {
+    const provider = String(req.body?.provider || '')
+    const key = String(req.body?.key ?? '')
+    if (!provider) {
+      res.status(400).json({ error: 'provider required' })
+      return
+    }
+    try {
+      api.setKey(provider, key)
+      res.json({ ok: true, providers: api.getProviders() })
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message })
+    }
   })
 
   server.post('/api/repaste', (req, res) => {

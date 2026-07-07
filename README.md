@@ -35,10 +35,14 @@ The floating recording pill and the web UI are the only visible surfaces; termin
 
 ### Choosing the STT provider
 
-Not locked to one vendor. In `.env`:
+Not locked to one vendor. Pick the provider in the web UI and paste your own API
+key there — it's stored encrypted in the macOS Keychain (via Electron `safeStorage`),
+never in a file or in git. `.env` still works as a fallback for development.
 
-- **Groq** (default, cheap + fast): `STT_PROVIDER=groq`, `GROQ_API_KEY=...` (https://console.groq.com/keys)
-- **OpenAI**: `STT_PROVIDER=openai`, `OPENAI_API_KEY=...` (https://platform.openai.com/api-keys; model `whisper-1` or `gpt-4o-transcribe`)
+- **Groq** (cheap + fast): key from https://console.groq.com/keys
+- **OpenAI**: key from https://platform.openai.com/api-keys (model `whisper-1` or `gpt-4o-transcribe`)
+
+`.env` fallback (optional): `STT_PROVIDER=groq`, `GROQ_API_KEY=...` / `OPENAI_API_KEY=...`
 
 Adding another cloud provider (Deepgram, ElevenLabs, AssemblyAI) is one more entry in
 the `PROVIDERS` map in `src/main.ts`. Local whisper.cpp (offline, free) is planned for v0.2.

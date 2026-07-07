@@ -3,7 +3,7 @@ import { uIOhook } from 'uiohook-napi'
 import { exec } from 'child_process'
 import * as path from 'path'
 import * as dotenv from 'dotenv'
-import { addEntry, loadSettings, saveSettings, loadHistory, clearHistory, type Settings } from './store'
+import { addEntry, loadSettings, saveSettings, loadHistory, clearHistory, saveKey, getKey, hasKey, type Settings } from './store'
 import { startServer } from './server'
 
 dotenv.config()
@@ -96,9 +96,10 @@ async function startWebUi() {
       Object.fromEntries(
         Object.entries(PROVIDER_META).map(([name, m]) => [
           name,
-          { models: m.models, keyPresent: !!process.env[m.keyEnv] },
+          { models: m.models, keyPresent: hasKey(name) || !!process.env[m.keyEnv] },
         ])
       ),
+    setKey: (provider, key) => saveKey(provider, key),
     repaste: (text) => repasteWithDelay(text),
   })
   const url = `http://127.0.0.1:${PORT}`
@@ -111,7 +112,8 @@ function banner() {
   console.log('\n=== netraluisWhisper ===')
   console.log(`trigger keycode : ${TRIGGER_KEYCODE} (hold to talk)`)
   console.log(`provider        : ${settings.provider}  model: ${settings.model}  lang: ${settings.language}`)
-  console.log(`api key         : ${m && process.env[m.keyEnv] ? 'set' : `MISSING for ${settings.provider}`}`)
+  const keySet = hasKey(settings.provider) || (m && process.env[m.keyEnv])
+  console.log(`api key         : ${keySet ? 'set' : `MISSING for ${settings.provider} (add it in the web UI)`}`)
   console.log(`web UI          : http://127.0.0.1:${PORT}`)
   console.log('Hold Right-Cmd, speak, release. Grant Mic + Input Monitoring + Accessibility.\n')
 }
@@ -184,8 +186,9 @@ ipcMain.on('audio-data', async (_evt, buf: ArrayBuffer) => {
 async function transcribe(bytes: Buffer): Promise<string> {
   const m = PROVIDER_META[settings.provider]
   if (!m) throw new Error(`unknown provider '${settings.provider}'`)
-  const key = process.env[m.keyEnv]
-  if (!key) throw new Error(`API key missing for '${settings.provider}' (.env: ${m.keyEnv})`)
+  // Prefer the key entered in the UI (Keychain); fall back to .env for dev.
+  const key = getKey(settings.provider) || process.env[m.keyEnv]
+  if (!key) throw new Error(`API key missing for '${settings.provider}' — add it in the web UI`)
 
   const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
   const form = new FormData()
