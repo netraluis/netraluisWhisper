@@ -2,13 +2,26 @@ import express from 'express'
 import * as path from 'path'
 import type { Entry, Settings } from './store'
 
+export interface ProviderInfo {
+  kind: 'cloud' | 'local'
+  models: { id: string; label: string }[]
+  keyPresent: boolean
+}
+export interface ModelStatus {
+  ready: string
+  loading: { model: string; progress: number } | null
+  error: string
+}
+
 export interface ServerApi {
   getHistory: () => Entry[]
   clearHistory: () => void
   getSettings: () => Settings
   setSettings: (s: Settings) => void
-  getProviders: () => Record<string, { models: string[]; keyPresent: boolean }>
+  getProviders: () => Record<string, ProviderInfo>
   setKey: (provider: string, key: string) => void
+  loadLocalModel: (model: string) => void
+  getModelStatus: () => ModelStatus
   repaste: (text: string) => void
 }
 
@@ -63,12 +76,26 @@ export function startServer(port: number, api: ServerApi): Promise<void> {
     }
   })
 
+  // Trigger a local model download+load in the inference window.
+  server.post('/api/model/load', (req, res) => {
+    const model = String(req.body?.model || '')
+    if (!model) {
+      res.status(400).json({ error: 'model required' })
+      return
+    }
+    api.loadLocalModel(model)
+    res.json({ ok: true })
+  })
+  server.get('/api/model/status', (_req, res) => res.json(api.getModelStatus()))
+
   server.post('/api/repaste', (req, res) => {
     const text = String(req.body?.text || '')
     if (text) api.repaste(text)
     res.json({ ok: !!text })
   })
 
+  // Dedicated inference window's page (loaded over http for the web backend).
+  server.use('/infer', express.static(path.join(__dirname, '..', 'infer-web')))
   server.use(express.static(path.join(__dirname, '..', 'web')))
 
   return new Promise((resolve) => {

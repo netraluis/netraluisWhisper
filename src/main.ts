@@ -3,30 +3,64 @@ import { uIOhook } from 'uiohook-napi'
 import { exec } from 'child_process'
 import * as path from 'path'
 import * as dotenv from 'dotenv'
-import { addEntry, loadSettings, saveSettings, loadHistory, clearHistory, saveKey, getKey, hasKey, type Settings } from './store'
+import {
+  addEntry, loadSettings, saveSettings, loadHistory, clearHistory,
+  saveKey, getKey, hasKey, type Settings,
+} from './store'
 import { startServer } from './server'
+import { encodeWav } from './wav'
 
 dotenv.config()
 
-// --- STT providers (pluggable). Keys stay in env/Keychain; provider+model+lang
-// are chosen from the web UI at runtime. ---
-interface ProviderMeta { base: string; keyEnv: string; models: string[] }
-const PROVIDER_META: Record<string, ProviderMeta> = {
+// WebGPU for the local inference window (no-op if already enabled).
+app.commandLine.appendSwitch('enable-unsafe-webgpu')
+app.commandLine.appendSwitch('enable-features', 'WebGPU')
+
+// --- STT engines. Two kinds:
+//   cloud: HTTP API + your key (Groq/OpenAI)
+//   local: on-device Whisper via transformers.js in a dedicated window ---
+interface Model { id: string; label: string }
+type Provider =
+  | { kind: 'cloud'; base: string; keyEnv: string; models: Model[] }
+  | { kind: 'local'; models: Model[] }
+
+const PROVIDERS: Record<string, Provider> = {
+  local: {
+    kind: 'local',
+    models: [
+      { id: 'Xenova/whisper-tiny', label: 'tiny (~40MB, rápido)' },
+      { id: 'Xenova/whisper-base', label: 'base (~80MB)' },
+      { id: 'Xenova/whisper-small', label: 'small (~250MB, recomendado)' },
+      { id: 'onnx-community/whisper-large-v3-turbo', label: 'large-v3-turbo (~1.6GB)' },
+    ],
+  },
   groq: {
+    kind: 'cloud',
     base: 'https://api.groq.com/openai/v1',
     keyEnv: 'GROQ_API_KEY',
-    models: ['whisper-large-v3-turbo', 'whisper-large-v3', 'distil-whisper-large-v3-en'],
+    models: [
+      { id: 'whisper-large-v3-turbo', label: 'whisper-large-v3-turbo' },
+      { id: 'whisper-large-v3', label: 'whisper-large-v3' },
+      { id: 'distil-whisper-large-v3-en', label: 'distil-whisper-large-v3-en' },
+    ],
   },
   openai: {
+    kind: 'cloud',
     base: 'https://api.openai.com/v1',
     keyEnv: 'OPENAI_API_KEY',
-    models: ['gpt-4o-transcribe', 'gpt-4o-mini-transcribe', 'whisper-1'],
+    models: [
+      { id: 'gpt-4o-transcribe', label: 'gpt-4o-transcribe' },
+      { id: 'gpt-4o-mini-transcribe', label: 'gpt-4o-mini-transcribe' },
+      { id: 'whisper-1', label: 'whisper-1' },
+    ],
   },
 }
 
+const SAMPLE_RATE = 16000
+
 const DEFAULT_SETTINGS: Settings = {
   provider: (process.env.STT_PROVIDER || 'groq').toLowerCase(),
-  model: process.env.GROQ_MODEL || process.env.OPENAI_MODEL || 'whisper-large-v3-turbo',
+  model: process.env.GROQ_MODEL || 'whisper-large-v3-turbo',
   language: process.env.STT_LANG || 'es',
 }
 let settings: Settings = { ...DEFAULT_SETTINGS }
@@ -35,13 +69,18 @@ const TRIGGER_KEYCODE = Number(process.env.TRIGGER_KEYCODE || 3676) // Right Cmd
 const DEBUG_KEYS = process.env.DEBUG_KEYS === '1'
 const PORT = Number(process.env.PORT || 8765)
 
-let win: BrowserWindow | null = null
+let win: BrowserWindow | null = null // overlay pill + mic
+let inferWin: BrowserWindow | null = null // dedicated local-inference window
 let recording = false
-let pendingApp = '' // frontmost app captured at record start
+let pendingApp = ''
 
-function createWindow() {
-  // Visible overlay pill that ALSO runs getUserMedia. focusable:false +
-  // showInactive() => never steals focus, so paste lands in your real app.
+// Local inference state (reported by inferWin).
+let inferReadyModel = '' // which model is currently loaded+warm
+let inferLoading: { model: string; progress: number } | null = null
+let inferError = ''
+let pendingInfer: ((r: { text?: string; error?: string }) => void) | null = null
+
+function createOverlay() {
   win = new BrowserWindow({
     width: 240, height: 72, show: false, frame: false, transparent: true,
     hasShadow: false, resizable: false, focusable: false, skipTaskbar: true,
@@ -54,6 +93,18 @@ function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
   win.setBounds({ x: Math.round(width / 2 - 120), y: height - 100, width: 240, height: 72 })
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
+}
+
+function createInferWindow() {
+  // Opaque, no nodeIntegration, http origin => web backend + WebGPU + model cache.
+  inferWin = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'infer-preload.js'),
+      backgroundThrottling: false,
+    },
+  })
+  inferWin.loadURL(`http://127.0.0.1:${PORT}/infer/`)
 }
 
 function showOverlay(state: 'recording' | 'transcribing') {
@@ -70,17 +121,89 @@ app.whenReady().then(async () => {
   settings = loadSettings(DEFAULT_SETTINGS)
   if (process.platform === 'darwin') {
     try {
-      const ok = await systemPreferences.askForMediaAccess('microphone')
-      console.log('[perm] microphone access:', ok)
-    } catch (e) {
-      console.log('[perm] microphone request failed:', e)
-    }
+      await systemPreferences.askForMediaAccess('microphone')
+    } catch {}
   }
-  createWindow()
+  await startWebUi() // server must be up before inferWin loads its URL
+  createOverlay()
+  createInferWindow()
+  setupInferIpc()
   setupHotkey()
-  await startWebUi()
   banner()
 })
+
+// --- Local inference IPC (with the dedicated window) ---
+function setupInferIpc() {
+  ipcMain.on('model-progress', (_e, d: { model: string; progress: number }) => {
+    inferLoading = d
+  })
+  ipcMain.on('model-ready', (_e, d: { model: string }) => {
+    inferReadyModel = d.model
+    inferLoading = null
+    inferError = ''
+    console.log('[local] model ready:', d.model)
+  })
+  ipcMain.on('model-error', (_e, d: { error: string }) => {
+    inferLoading = null
+    inferError = d.error
+    console.error('[local] model error:', d.error)
+  })
+  ipcMain.on('infer-result', (_e, r: { text?: string; error?: string }) => {
+    const cb = pendingInfer
+    pendingInfer = null
+    cb?.(r)
+  })
+}
+
+function loadLocalModel(model: string) {
+  if (!inferWin) return
+  inferError = ''
+  inferLoading = { model, progress: 0 }
+  inferReadyModel = inferReadyModel === model ? inferReadyModel : ''
+  inferWin.webContents.send('load-model', { model })
+}
+
+function localInfer(pcm: Float32Array, language: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!inferWin) return reject(new Error('inference window missing'))
+    if (pendingInfer) return reject(new Error('otra transcripción en curso'))
+    pendingInfer = (r) => (r.error ? reject(new Error(r.error)) : resolve(r.text || ''))
+    inferWin.webContents.send('infer', { audio: pcm, language })
+  })
+}
+
+function firstCloudWithKey(): string {
+  for (const [name, p] of Object.entries(PROVIDERS)) {
+    if (p.kind === 'cloud' && (hasKey(name) || !!process.env[p.keyEnv])) return name
+  }
+  return ''
+}
+
+async function cloudTranscribe(
+  pcm: Float32Array, providerName: string, model: string, language: string
+): Promise<string> {
+  const p = PROVIDERS[providerName]
+  if (!p || p.kind !== 'cloud') throw new Error(`not a cloud provider: ${providerName}`)
+  const key = getKey(providerName) || process.env[p.keyEnv]
+  if (!key) throw new Error(`API key missing for ${providerName} — add it in the web UI`)
+
+  const wav = encodeWav(pcm, SAMPLE_RATE)
+  const ab = wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength) as ArrayBuffer
+  const form = new FormData()
+  form.append('file', new Blob([ab], { type: 'audio/wav' }), 'audio.wav')
+  form.append('model', model)
+  form.append('language', language)
+  form.append('response_format', 'json')
+
+  const res = await fetch(`${p.base}/audio/transcriptions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+  })
+  if (!res.ok) throw new Error(`${providerName} ${res.status}: ${await res.text()}`)
+  const data = (await res.json()) as { text?: string }
+  return (data.text || '').trim()
+}
 
 async function startWebUi() {
   await startServer(PORT, {
@@ -94,12 +217,18 @@ async function startWebUi() {
     },
     getProviders: () =>
       Object.fromEntries(
-        Object.entries(PROVIDER_META).map(([name, m]) => [
+        Object.entries(PROVIDERS).map(([name, p]) => [
           name,
-          { models: m.models, keyPresent: hasKey(name) || !!process.env[m.keyEnv] },
+          {
+            kind: p.kind,
+            models: p.models,
+            keyPresent: p.kind === 'local' ? true : hasKey(name) || !!process.env[p.keyEnv],
+          },
         ])
       ),
     setKey: (provider, key) => saveKey(provider, key),
+    loadLocalModel: (model) => loadLocalModel(model),
+    getModelStatus: () => ({ ready: inferReadyModel, loading: inferLoading, error: inferError }),
     repaste: (text) => repasteWithDelay(text),
   })
   const url = `http://127.0.0.1:${PORT}`
@@ -108,12 +237,10 @@ async function startWebUi() {
 }
 
 function banner() {
-  const m = PROVIDER_META[settings.provider]
+  const p = PROVIDERS[settings.provider]
   console.log('\n=== netraluisWhisper ===')
   console.log(`trigger keycode : ${TRIGGER_KEYCODE} (hold to talk)`)
-  console.log(`provider        : ${settings.provider}  model: ${settings.model}  lang: ${settings.language}`)
-  const keySet = hasKey(settings.provider) || (m && process.env[m.keyEnv])
-  console.log(`api key         : ${keySet ? 'set' : `MISSING for ${settings.provider} (add it in the web UI)`}`)
+  console.log(`engine          : ${settings.provider} (${p?.kind})  model: ${settings.model}  lang: ${settings.language}`)
   console.log(`web UI          : http://127.0.0.1:${PORT}`)
   console.log('Hold Right-Cmd, speak, release. Grant Mic + Input Monitoring + Accessibility.\n')
 }
@@ -150,27 +277,44 @@ function setupHotkey() {
   uIOhook.start()
 }
 
-ipcMain.on('audio-data', async (_evt, buf: ArrayBuffer) => {
-  const bytes = Buffer.from(buf)
-  if (bytes.length < 1200) {
-    console.log('(recording too short / empty, skipped)')
+ipcMain.on('audio-pcm', async (_evt, buf: ArrayBuffer, len: number) => {
+  const ab: ArrayBuffer = buf instanceof ArrayBuffer ? buf : (buf as any).buffer
+  const pcm = new Float32Array(ab, 0, len || undefined)
+  if (pcm.length < 1600) {
+    console.log('(recording too short, skipped)')
     hideOverlay()
     return
   }
-  const t0 = Date.now()
+  const provider = PROVIDERS[settings.provider]
+  let usedProvider = settings.provider
+  let usedModel = settings.model
   try {
-    const text = await transcribe(bytes)
-    const ms = Date.now() - t0
+    let text = ''
+    if (provider?.kind === 'local') {
+      if (inferReadyModel === settings.model) {
+        text = await localInfer(pcm, settings.language)
+      } else {
+        // D3: model not ready — fall back to cloud if a key exists, else tell user.
+        const cloud = firstCloudWithKey()
+        if (cloud) {
+          const cp = PROVIDERS[cloud] as Extract<Provider, { kind: 'cloud' }>
+          usedProvider = cloud
+          usedModel = cp.models[0].id
+          console.log('[local] model not ready -> falling back to', cloud)
+          text = await cloudTranscribe(pcm, cloud, usedModel, settings.language)
+        } else {
+          throw new Error('modelo local no activado — actívalo en Ajustes (o añade una key cloud)')
+        }
+      }
+    } else {
+      text = await cloudTranscribe(pcm, settings.provider, settings.model, settings.language)
+    }
+
     if (text) {
       pasteText(text)
       addEntry({
-        ts: Date.now(),
-        text,
-        provider: settings.provider,
-        model: settings.model,
-        lang: settings.language,
-        ms,
-        appName: pendingApp || undefined,
+        ts: Date.now(), text, provider: usedProvider, model: usedModel,
+        lang: settings.language, ms: 0, appName: pendingApp || undefined,
       })
       console.log('pasted:', JSON.stringify(text))
     } else {
@@ -182,30 +326,6 @@ ipcMain.on('audio-data', async (_evt, buf: ArrayBuffer) => {
     hideOverlay()
   }
 })
-
-async function transcribe(bytes: Buffer): Promise<string> {
-  const m = PROVIDER_META[settings.provider]
-  if (!m) throw new Error(`unknown provider '${settings.provider}'`)
-  // Prefer the key entered in the UI (Keychain); fall back to .env for dev.
-  const key = getKey(settings.provider) || process.env[m.keyEnv]
-  if (!key) throw new Error(`API key missing for '${settings.provider}' — add it in the web UI`)
-
-  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
-  const form = new FormData()
-  form.append('file', new Blob([ab], { type: 'audio/webm' }), 'audio.webm')
-  form.append('model', settings.model)
-  form.append('language', settings.language)
-  form.append('response_format', 'json')
-
-  const res = await fetch(`${m.base}/audio/transcriptions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}` },
-    body: form,
-  })
-  if (!res.ok) throw new Error(`${settings.provider} ${res.status}: ${await res.text()}`)
-  const data = (await res.json()) as { text?: string }
-  return (data.text || '').trim()
-}
 
 function sendCmdV(cb?: () => void) {
   const script = 'tell application "System Events" to keystroke "v" using command down'
@@ -221,9 +341,6 @@ function pasteText(text: string) {
   sendCmdV(() => setTimeout(() => clipboard.writeText(prev), 600))
 }
 
-// Re-paste from the web UI: the browser has focus, so give the user ~2s to
-// switch to the target app before the synthetic Cmd+V fires. Clipboard is left
-// with the text (no restore) so a manual paste also works.
 function repasteWithDelay(text: string, delayMs = 2000) {
   clipboard.writeText(text)
   setTimeout(() => sendCmdV(), delayMs)
