@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "start": "npm run build && electron .",
-    "keys": "DEBUG_KEYS=1 npm run start"
+    "keys": "DEBUG_KEYS=1 npm run start",
+    "spike": "tsc && electron dist/spike.js"
   },
   "license": "MIT",
   "devDependencies": {
@@ -16,6 +17,7 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "dotenv": "^16.4.7",
     "express": "^4.22.2",
     "uiohook-napi": "^1.5.4"

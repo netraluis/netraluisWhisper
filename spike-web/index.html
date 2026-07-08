@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>netraluisWhisper — spike WebGPU</title>
+    <style>
+      body { background: #0f1012; color: #eaeaec; font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; }
+      h1 { font-size: 18px; }
+      .big { font-size: 22px; font-weight: 700; margin: 14px 0; }
+      #log div { padding: 5px 0; border-bottom: 1px solid #26282e; font-size: 14px; font-variant-numeric: tabular-nums; }
+      .ok { color: #37c871; }
+      .bad { color: #ff453a; }
+      .muted { color: #8b8d94; }
+    </style>
+  </head>
+  <body>
+    <h1>netraluisWhisper — prueba de viabilidad (T1)</h1>
+    <div class="big muted" id="verdict">Corriendo…</div>
+    <div id="log"></div>
+    <script type="module" src="./run.js"></script>
+  </body>
+</html>
