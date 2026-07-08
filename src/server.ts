@@ -26,7 +26,7 @@ export interface ServerApi {
   repaste: (text: string) => void
 }
 
-export function startServer(port: number, api: ServerApi): Promise<void> {
+export function startServer(port: number, api: ServerApi): Promise<number> {
   const server = express()
   server.use(express.json())
 
@@ -107,7 +107,20 @@ export function startServer(port: number, api: ServerApi): Promise<void> {
   server.use('/infer', express.static(path.join(__dirname, '..', 'infer-web')))
   server.use(express.static(path.join(__dirname, '..', 'web')))
 
-  return new Promise((resolve) => {
-    server.listen(port, '127.0.0.1', () => resolve())
+  // Bind loopback; if the port is taken, walk forward instead of hanging.
+  return new Promise((resolve, reject) => {
+    let attempts = 0
+    const tryListen = (p: number) => {
+      const srv = server.listen(p, '127.0.0.1', () => resolve(p))
+      srv.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE' && attempts < 15) {
+          attempts++
+          tryListen(p + 1)
+        } else {
+          reject(err)
+        }
+      })
+    }
+    tryListen(port)
   })
 }

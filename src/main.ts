@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, clipboard, systemPreferences, screen, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, clipboard, systemPreferences, screen, Tray, Menu, nativeImage } from 'electron'
 import { uIOhook } from 'uiohook-napi'
 import { exec } from 'child_process'
 import * as path from 'path'
@@ -72,6 +72,10 @@ let captureHotkey = false // when true, next keypress sets the trigger key
 
 let win: BrowserWindow | null = null // overlay pill + mic
 let inferWin: BrowserWindow | null = null // dedicated local-inference window
+let configWin: BrowserWindow | null = null // the config/history UI (own window, no browser)
+let tray: Tray | null = null
+let boundPort = 8765
+let quitting = false
 let recording = false
 let pendingApp = ''
 
@@ -105,7 +109,47 @@ function createInferWindow() {
       backgroundThrottling: false,
     },
   })
-  inferWin.loadURL(`http://127.0.0.1:${PORT}/infer/`)
+  inferWin.loadURL(`http://127.0.0.1:${boundPort}/infer/`)
+}
+
+// The config/history UI, in the app's own window (no external browser).
+function createConfigWindow() {
+  configWin = new BrowserWindow({
+    width: 900, height: 720, show: true, title: 'netraluisWhisper',
+    backgroundColor: '#0f1012',
+  })
+  configWin.loadURL(`http://127.0.0.1:${boundPort}/`)
+  configWin.on('close', (e) => {
+    // Closing the window keeps the app running (menubar); only quit via tray.
+    if (!quitting) {
+      e.preventDefault()
+      configWin?.hide()
+    }
+  })
+}
+
+function showConfig() {
+  if (!configWin || configWin.isDestroyed()) createConfigWindow()
+  else { configWin.show(); configWin.focus() }
+}
+
+function setupTray() {
+  tray = new Tray(nativeImage.createEmpty())
+  tray.setTitle('🎙') // text in the menubar (no icon asset needed)
+  tray.setToolTip('netraluisWhisper')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Abrir netraluisWhisper', click: () => showConfig() },
+      { type: 'separator' },
+      { label: 'Salir', click: () => { quitting = true; cleanupAndQuit() } },
+    ])
+  )
+  tray.on('click', () => showConfig())
+}
+
+function cleanupAndQuit() {
+  try { uIOhook.stop() } catch {}
+  app.quit()
 }
 
 function showOverlay(state: 'recording' | 'transcribing') {
@@ -125,20 +169,30 @@ function errorOverlay(msg: string) {
   setTimeout(() => hideOverlay(), 2800)
 }
 
-app.whenReady().then(async () => {
-  settings = loadSettings(DEFAULT_SETTINGS)
-  if (process.platform === 'darwin') {
-    try {
-      await systemPreferences.askForMediaAccess('microphone')
-    } catch {}
-  }
-  await startWebUi() // server must be up before inferWin loads its URL
-  createOverlay()
-  createInferWindow()
-  setupInferIpc()
-  setupHotkey()
-  banner()
-})
+// Single instance: a second launch just focuses the running app (avoids
+// double-binding the port + global hotkey).
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => showConfig())
+
+  app.whenReady().then(async () => {
+    settings = loadSettings(DEFAULT_SETTINGS)
+    if (process.platform === 'darwin') {
+      try {
+        await systemPreferences.askForMediaAccess('microphone')
+      } catch {}
+    }
+    await startWebUi() // server must be up before windows load their URLs
+    createOverlay()
+    createInferWindow()
+    setupInferIpc()
+    setupHotkey()
+    setupTray()
+    createConfigWindow() // show the UI in our own window on launch
+    banner()
+  })
+}
 
 // --- Local inference IPC (with the dedicated window) ---
 function setupInferIpc() {
@@ -216,7 +270,7 @@ async function cloudTranscribe(
 }
 
 async function startWebUi() {
-  await startServer(PORT, {
+  boundPort = await startServer(PORT, {
     getHistory: () => loadHistory(),
     clearHistory: () => clearHistory(),
     getSettings: () => settings,
@@ -242,9 +296,7 @@ async function startWebUi() {
     startHotkeyCapture: () => { captureHotkey = true },
     repaste: (text) => repasteWithDelay(text),
   })
-  const url = `http://127.0.0.1:${PORT}`
-  console.log('web UI:', url)
-  shell.openExternal(url)
+  console.log('web UI (own window):', `http://127.0.0.1:${boundPort}`)
 }
 
 function banner() {
@@ -252,7 +304,7 @@ function banner() {
   console.log('\n=== netraluisWhisper ===')
   console.log(`trigger keycode : ${settings.triggerKeycode} (hold to talk)`)
   console.log(`engine          : ${settings.provider} (${p?.kind})  model: ${settings.model}  lang: ${settings.language}`)
-  console.log(`web UI          : http://127.0.0.1:${PORT}`)
+  console.log(`web UI          : http://127.0.0.1:${boundPort} (in-app window + menubar 🎙)`)
   console.log('Hold the trigger key, speak, release. Grant Mic + Input Monitoring + Accessibility.\n')
 }
 
