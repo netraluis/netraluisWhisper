@@ -4,7 +4,8 @@
   "description": "Local push-to-talk voice dictation for macOS (Wispr Flow style).",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run build:infer",
+    "build:infer": "esbuild infer-web/infer.src.js --bundle --format=esm --outfile=infer-web/infer.js && node scripts/copy-ort-wasm.mjs",
     "start": "npm run build && electron .",
     "keys": "DEBUG_KEYS=1 npm run start",
     "spike": "tsc && electron dist/spike.js",
@@ -57,6 +58,7 @@
     "@types/node": "^22.10.0",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.2",
     "typescript": "^5.7.2"
   },
   "dependencies": {
