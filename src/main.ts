@@ -62,12 +62,13 @@ const DEFAULT_SETTINGS: Settings = {
   provider: (process.env.STT_PROVIDER || 'groq').toLowerCase(),
   model: process.env.GROQ_MODEL || 'whisper-large-v3-turbo',
   language: process.env.STT_LANG || 'es',
+  triggerKeycode: Number(process.env.TRIGGER_KEYCODE || 3676), // Right Cmd default
 }
 let settings: Settings = { ...DEFAULT_SETTINGS }
 
-const TRIGGER_KEYCODE = Number(process.env.TRIGGER_KEYCODE || 3676) // Right Cmd
 const DEBUG_KEYS = process.env.DEBUG_KEYS === '1'
 const PORT = Number(process.env.PORT || 8765)
+let captureHotkey = false // when true, next keypress sets the trigger key
 
 let win: BrowserWindow | null = null // overlay pill + mic
 let inferWin: BrowserWindow | null = null // dedicated local-inference window
@@ -115,6 +116,13 @@ function showOverlay(state: 'recording' | 'transcribing') {
 function hideOverlay() {
   win?.webContents.send('state', 'idle')
   win?.hide()
+}
+// Hard-stop, visible: flash the reason in the pill, then hide.
+function errorOverlay(msg: string) {
+  if (!win) return
+  win.webContents.send('state', 'error', msg)
+  win.showInactive()
+  setTimeout(() => hideOverlay(), 2800)
 }
 
 app.whenReady().then(async () => {
@@ -174,7 +182,7 @@ function localInfer(pcm: Float32Array, language: string): Promise<string> {
 
 function firstCloudWithKey(): string {
   for (const [name, p] of Object.entries(PROVIDERS)) {
-    if (p.kind === 'cloud' && (hasKey(name) || !!process.env[p.keyEnv])) return name
+    if (p.kind === 'cloud' && hasKey(name)) return name
   }
   return ''
 }
@@ -184,8 +192,10 @@ async function cloudTranscribe(
 ): Promise<string> {
   const p = PROVIDERS[providerName]
   if (!p || p.kind !== 'cloud') throw new Error(`not a cloud provider: ${providerName}`)
-  const key = getKey(providerName) || process.env[p.keyEnv]
-  if (!key) throw new Error(`API key missing for ${providerName} — add it in the web UI`)
+  // Keys come only from the UI (Keychain). No .env fallback => no secret ever
+  // lives in a file that could ship inside the packaged app.
+  const key = getKey(providerName)
+  if (!key) throw new Error(`Falta la API key de ${providerName} (métela en Ajustes)`)
 
   const wav = encodeWav(pcm, SAMPLE_RATE)
   const ab = wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength) as ArrayBuffer
@@ -222,13 +232,14 @@ async function startWebUi() {
           {
             kind: p.kind,
             models: p.models,
-            keyPresent: p.kind === 'local' ? true : hasKey(name) || !!process.env[p.keyEnv],
+            keyPresent: p.kind === 'local' ? true : hasKey(name),
           },
         ])
       ),
     setKey: (provider, key) => saveKey(provider, key),
     loadLocalModel: (model) => loadLocalModel(model),
     getModelStatus: () => ({ ready: inferReadyModel, loading: inferLoading, error: inferError }),
+    startHotkeyCapture: () => { captureHotkey = true },
     repaste: (text) => repasteWithDelay(text),
   })
   const url = `http://127.0.0.1:${PORT}`
@@ -239,10 +250,10 @@ async function startWebUi() {
 function banner() {
   const p = PROVIDERS[settings.provider]
   console.log('\n=== netraluisWhisper ===')
-  console.log(`trigger keycode : ${TRIGGER_KEYCODE} (hold to talk)`)
+  console.log(`trigger keycode : ${settings.triggerKeycode} (hold to talk)`)
   console.log(`engine          : ${settings.provider} (${p?.kind})  model: ${settings.model}  lang: ${settings.language}`)
   console.log(`web UI          : http://127.0.0.1:${PORT}`)
-  console.log('Hold Right-Cmd, speak, release. Grant Mic + Input Monitoring + Accessibility.\n')
+  console.log('Hold the trigger key, speak, release. Grant Mic + Input Monitoring + Accessibility.\n')
 }
 
 function getFrontApp(): Promise<string> {
@@ -257,7 +268,15 @@ function getFrontApp(): Promise<string> {
 function setupHotkey() {
   uIOhook.on('keydown', (e) => {
     if (DEBUG_KEYS) console.log('[keydown] keycode =', e.keycode)
-    if (e.keycode === TRIGGER_KEYCODE && !recording) {
+    // Hotkey-capture mode: the next key the user presses becomes the trigger.
+    if (captureHotkey) {
+      captureHotkey = false
+      settings = { ...settings, triggerKeycode: e.keycode }
+      saveSettings(settings)
+      console.log('[hotkey] trigger set to keycode', e.keycode)
+      return
+    }
+    if (e.keycode === settings.triggerKeycode && !recording) {
       recording = true
       pendingApp = ''
       getFrontApp().then((a) => (pendingApp = a))
@@ -267,7 +286,7 @@ function setupHotkey() {
     }
   })
   uIOhook.on('keyup', (e) => {
-    if (e.keycode === TRIGGER_KEYCODE && recording) {
+    if (e.keycode === settings.triggerKeycode && recording) {
       recording = false
       showOverlay('transcribing')
       win?.webContents.send('stop-recording')
@@ -320,10 +339,11 @@ ipcMain.on('audio-pcm', async (_evt, buf: ArrayBuffer, len: number) => {
     } else {
       console.log('(no speech detected)')
     }
-  } catch (err) {
-    console.error('transcribe error:', (err as Error).message)
-  } finally {
     hideOverlay()
+  } catch (err) {
+    const msg = (err as Error).message
+    console.error('transcribe error:', msg)
+    errorOverlay(msg) // hard-stop, visible to the user (not a silent failure)
   }
 })
 

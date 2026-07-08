@@ -44,6 +44,9 @@
         border-top-color: #fff;
         animation: spin 0.7s linear infinite;
       }
+      /* error: solid red dot + message */
+      body.error #dot { background: #ff453a; }
+      body.error #pill { max-width: 280px; }
       @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
       @keyframes spin { to { transform: rotate(360deg); } }
     </style>
@@ -54,10 +57,11 @@
     <script>
       const { ipcRenderer } = require('electron')
       const label = document.getElementById('label')
-      ipcRenderer.on('state', (_e, state) => {
+      ipcRenderer.on('state', (_e, state, msg) => {
         document.body.className = state
         if (state === 'recording') label.textContent = 'Escuchando…'
         else if (state === 'transcribing') label.textContent = 'Transcribiendo…'
+        else if (state === 'error') label.textContent = msg || 'Error'
       })
     </script>
   </body>

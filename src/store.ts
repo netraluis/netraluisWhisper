@@ -24,6 +24,7 @@ export interface Settings {
   provider: string
   model: string
   language: string
+  triggerKeycode: number // uiohook keycode for push-to-talk
 }
 
 function readJson<T>(file: string, fallback: T): T {

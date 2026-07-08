@@ -22,6 +22,7 @@ export interface ServerApi {
   setKey: (provider: string, key: string) => void
   loadLocalModel: (model: string) => void
   getModelStatus: () => ModelStatus
+  startHotkeyCapture: () => void
   repaste: (text: string) => void
 }
 
@@ -55,7 +56,9 @@ export function startServer(port: number, api: ServerApi): Promise<void> {
       res.status(400).json({ error: 'provider and model required' })
       return
     }
-    api.setSettings({ provider, model, language: language || 'es' })
+    // Preserve the hotkey (set via /api/hotkey/capture, not this form).
+    const cur = api.getSettings()
+    api.setSettings({ provider, model, language: language || 'es', triggerKeycode: cur.triggerKeycode })
     res.json({ ok: true, settings: api.getSettings() })
   })
 
@@ -87,6 +90,12 @@ export function startServer(port: number, api: ServerApi): Promise<void> {
     res.json({ ok: true })
   })
   server.get('/api/model/status', (_req, res) => res.json(api.getModelStatus()))
+
+  // Arm hotkey capture: the next global keypress becomes the push-to-talk key.
+  server.post('/api/hotkey/capture', (_req, res) => {
+    api.startHotkeyCapture()
+    res.json({ ok: true })
+  })
 
   server.post('/api/repaste', (req, res) => {
     const text = String(req.body?.text || '')

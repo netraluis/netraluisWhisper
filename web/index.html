@@ -88,6 +88,14 @@
           </div>
         </div>
 
+        <div class="field" style="margin-top:14px">
+          <label>Tecla para hablar (mantener pulsada)</label>
+          <div class="keyrow">
+            <span class="note muted" id="hotkeyLabel" style="margin:0">—</span>
+            <button class="btn" id="hotkeyBtn" onclick="captureHotkey()">Cambiar tecla</button>
+          </div>
+        </div>
+
         <!-- Cloud: bring your own API key -->
         <div id="cloudBox" style="margin-top:14px">
           <div class="field">
@@ -140,6 +148,12 @@
     <script>
       let providers = {}
       let statusTimer = null
+      let currentKeycode = null
+
+      function keyLabel(code) {
+        const known = { 3676: 'Cmd derecho', 3675: 'Cmd izquierdo', 29: 'Ctrl izq', 3613: 'Ctrl der', 56: 'Opt izq', 3640: 'Opt der' }
+        return known[code] ? `${known[code]} (${code})` : `tecla ${code}`
+      }
 
       function toast(msg) {
         const t = document.getElementById('toast')
@@ -156,6 +170,8 @@
         provSel.value = settings.provider
         fillModels(settings.provider, settings.model)
         document.getElementById('language').value = settings.language
+        currentKeycode = settings.triggerKeycode
+        document.getElementById('hotkeyLabel').textContent = keyLabel(settings.triggerKeycode)
         applyProviderUI(settings.provider)
         // Self-heal: if the saved model isn't valid for the provider, persist
         // whatever the dropdown fell back to so cloud calls use a real model id.
@@ -208,6 +224,32 @@
         if ((providers[document.getElementById('provider').value] || {}).kind === 'local') refreshModelStatus()
       })
       document.getElementById('language').addEventListener('change', saveSettings)
+
+      // --- Hotkey capture ---
+      async function captureHotkey() {
+        const btn = document.getElementById('hotkeyBtn')
+        const lbl = document.getElementById('hotkeyLabel')
+        await fetch('/api/hotkey/capture', { method: 'POST' })
+        lbl.textContent = 'Pulsa una tecla…'
+        btn.disabled = true
+        let tries = 0
+        const poll = setInterval(async () => {
+          tries++
+          const s = await fetch('/api/settings').then((r) => r.json()).catch(() => null)
+          const kc = s?.settings?.triggerKeycode
+          if (kc != null && kc !== currentKeycode) {
+            currentKeycode = kc
+            lbl.textContent = keyLabel(kc)
+            btn.disabled = false
+            clearInterval(poll)
+            toast('Tecla actualizada')
+          } else if (tries > 20) {
+            lbl.textContent = keyLabel(currentKeycode)
+            btn.disabled = false
+            clearInterval(poll)
+          }
+        }, 500)
+      }
 
       // --- API key (cloud) ---
       async function saveKey() {
