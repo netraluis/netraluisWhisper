@@ -23,6 +23,7 @@ export interface ServerApi {
   loadLocalModel: (model: string) => void
   getModelStatus: () => ModelStatus
   startHotkeyCapture: () => void
+  openPrivacyPane: (pane: string) => void
   repaste: (text: string) => void
 }
 
@@ -94,6 +95,11 @@ export function startServer(port: number, api: ServerApi): Promise<number> {
   // Arm hotkey capture: the next global keypress becomes the push-to-talk key.
   server.post('/api/hotkey/capture', (_req, res) => {
     api.startHotkeyCapture()
+    res.json({ ok: true })
+  })
+
+  server.post('/api/open-privacy', (req, res) => {
+    api.openPrivacyPane(String(req.body?.pane || ''))
     res.json({ ok: true })
   })
 

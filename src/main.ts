@@ -294,6 +294,7 @@ async function startWebUi() {
     loadLocalModel: (model) => loadLocalModel(model),
     getModelStatus: () => ({ ready: inferReadyModel, loading: inferLoading, error: inferError }),
     startHotkeyCapture: () => { captureHotkey = true },
+    openPrivacyPane: (pane) => openPrivacyPane(pane),
     repaste: (text) => repasteWithDelay(text),
   })
   console.log('web UI (own window):', `http://127.0.0.1:${boundPort}`)
@@ -306,6 +307,18 @@ function banner() {
   console.log(`engine          : ${settings.provider} (${p?.kind})  model: ${settings.model}  lang: ${settings.language}`)
   console.log(`web UI          : http://127.0.0.1:${boundPort} (in-app window + menubar 🎙)`)
   console.log('Hold the trigger key, speak, release. Grant Mic + Input Monitoring + Accessibility.\n')
+}
+
+// Jump the user straight to the right macOS privacy pane (onboarding).
+function openPrivacyPane(pane: string) {
+  const panes: Record<string, string> = {
+    microphone: 'Privacy_Microphone',
+    accessibility: 'Privacy_Accessibility',
+    input: 'Privacy_ListenEvent',
+  }
+  const anchor = panes[pane]
+  if (!anchor) return
+  exec(`open "x-apple.systempreferences:com.apple.preference.security?${anchor}"`)
 }
 
 function getFrontApp(): Promise<string> {

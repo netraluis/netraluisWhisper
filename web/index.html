@@ -54,6 +54,9 @@
         padding: 10px 16px; border-radius: 10px; font-size: 13px; opacity: 0;
         transition: opacity .2s; pointer-events: none; }
       .toast.show { opacity: 1; }
+      .step-line { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+      .step-line .tick { flex: none; font-size: 15px; color: var(--muted); line-height: 1.5; }
+      #onboarding .btn { margin: 0 4px 4px 0; }
     </style>
   </head>
   <body>
@@ -63,6 +66,23 @@
     </header>
 
     <div class="wrap">
+      <div class="panel" id="onboarding" style="border-color:#3a3d45">
+        <h2>Primeros pasos</h2>
+        <div id="ob-steps" style="display:flex; flex-direction:column; gap:10px">
+          <div class="step-line"><span class="tick" id="ob-engine">○</span>
+            <span><strong>Elige motor y credencial</strong> — abajo: motor <b>local</b> (descarga un modelo) o <b>cloud</b> (pega tu API key).</span></div>
+          <div class="step-line"><span class="tick">○</span>
+            <span><strong>Concede permisos a la app</strong> en macOS:
+              <button class="btn" onclick="openPrivacy('microphone')">Micrófono</button>
+              <button class="btn" onclick="openPrivacy('input')">Input Monitoring</button>
+              <button class="btn" onclick="openPrivacy('accessibility')">Accesibilidad</button>
+              <span class="note muted" style="margin-top:6px">Actívalos y reinicia la app.</span>
+            </span></div>
+          <div class="step-line"><span class="tick">○</span>
+            <span><strong>Dicta</strong> — mantén <b id="ob-key">Cmd derecho</b>, habla, suelta.</span></div>
+        </div>
+      </div>
+
       <div class="panel">
         <h2>Motor de transcripción</h2>
         <div class="row">
@@ -149,6 +169,27 @@
       let providers = {}
       let statusTimer = null
       let currentKeycode = null
+      let lastModelReady = ''
+
+      async function openPrivacy(pane) {
+        await fetch('/api/open-privacy', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pane }),
+        })
+      }
+
+      function updateOnboarding() {
+        const provider = document.getElementById('provider').value
+        const info = providers[provider] || {}
+        let ready = false
+        if (info.kind === 'cloud') ready = !!info.keyPresent
+        else if (info.kind === 'local') ready = lastModelReady && lastModelReady === document.getElementById('model').value
+        const tick = document.getElementById('ob-engine')
+        tick.textContent = ready ? '●' : '○'
+        tick.style.color = ready ? '#37c871' : ''
+        document.getElementById('ob-key').textContent = keyLabel(currentKeycode || 3676)
+        document.getElementById('onboarding').style.opacity = ready ? '0.55' : '1'
+      }
 
       function keyLabel(code) {
         const known = { 3676: 'Cmd derecho', 3675: 'Cmd izquierdo', 29: 'Ctrl izq', 3613: 'Ctrl der', 56: 'Opt izq', 3640: 'Opt der' }
@@ -176,6 +217,7 @@
         // Self-heal: if the saved model isn't valid for the provider, persist
         // whatever the dropdown fell back to so cloud calls use a real model id.
         if (document.getElementById('model').value !== settings.model) saveSettings()
+        updateOnboarding()
       }
 
       function fillModels(provider, selected) {
@@ -200,6 +242,7 @@
           document.getElementById('keyStatus').textContent = present ? 'Key guardada ✓' : ''
           document.getElementById('apiKey').value = ''
         }
+        updateOnboarding()
       }
 
       async function saveSettings() {
@@ -293,6 +336,8 @@
         const model = document.getElementById('model').value
         const st = await fetch('/api/model/status').then((r) => r.json()).catch(() => null)
         if (!st) return
+        lastModelReady = st.ready || ''
+        updateOnboarding()
         const statusEl = document.getElementById('modelStatus')
         const wrap = document.getElementById('progressWrap')
         const bar = document.getElementById('progressBar')
