@@ -15,6 +15,9 @@
     "appId": "com.netraluis.netraluiswhisper",
     "productName": "netraluisWhisper",
     "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "dist/**/*",
       "web/**/*",
