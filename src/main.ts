@@ -271,9 +271,22 @@ async function cloudTranscribe(
     headers: { Authorization: `Bearer ${key}` },
     body: form,
   })
-  if (!res.ok) throw new Error(`${providerName} ${res.status}: ${await res.text()}`)
+  if (!res.ok) {
+    const body = await res.text()
+    console.error(`[${providerName}] ${res.status}: ${body}`) // full detail for debugging
+    throw new Error(friendlyHttpError(providerName, res.status))
+  }
   const data = (await res.json()) as { text?: string }
   return (data.text || '').trim()
+}
+
+// Turn a provider HTTP status into a short, clear message for the overlay.
+function friendlyHttpError(provider: string, status: number): string {
+  if (status === 401 || status === 403) return `Key de ${provider} incorrecta o sin permiso`
+  if (status === 429) return `${provider}: sin crédito o límite alcanzado`
+  if (status === 400) return `${provider}: petición rechazada (revisa el modelo)`
+  if (status >= 500) return `${provider} no disponible, reintenta`
+  return `${provider}: error ${status}`
 }
 
 async function startWebUi() {
