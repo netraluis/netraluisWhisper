@@ -161,6 +161,13 @@ function hideOverlay() {
   win?.webContents.send('state', 'idle')
   win?.hide()
 }
+// Success confirmation: flash "Pegado ✓" briefly, then hide.
+function doneOverlay() {
+  if (!win) return
+  win.webContents.send('state', 'done')
+  win.showInactive()
+  setTimeout(() => hideOverlay(), 950)
+}
 // Hard-stop, visible: flash the reason in the pill, then hide.
 function errorOverlay(msg: string) {
   if (!win) return
@@ -401,10 +408,11 @@ ipcMain.on('audio-pcm', async (_evt, buf: ArrayBuffer, len: number) => {
         lang: settings.language, ms: 0, appName: pendingApp || undefined,
       })
       console.log('pasted:', JSON.stringify(text))
+      doneOverlay() // "Pegado ✓"
     } else {
       console.log('(no speech detected)')
+      hideOverlay()
     }
-    hideOverlay()
   } catch (err) {
     const msg = (err as Error).message
     console.error('transcribe error:', msg)

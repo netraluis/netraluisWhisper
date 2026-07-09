@@ -44,6 +44,8 @@
         border-top-color: #fff;
         animation: spin 0.7s linear infinite;
       }
+      /* done: solid sand dot (label carries the ✓) */
+      body.done #dot { background: #F4B860; }
       /* error: solid red dot + message */
       body.error #dot { background: #ff453a; }
       body.error #pill { max-width: 280px; }
@@ -60,7 +62,8 @@
       ipcRenderer.on('state', (_e, state, msg) => {
         document.body.className = state
         if (state === 'recording') label.textContent = 'Escuchando…'
-        else if (state === 'transcribing') label.textContent = 'Transcribiendo…'
+        else if (state === 'transcribing') label.textContent = 'Convirtiendo tu voz…'
+        else if (state === 'done') label.textContent = 'Pegado ✓'
         else if (state === 'error') label.textContent = msg || 'Error'
       })
     </script>
