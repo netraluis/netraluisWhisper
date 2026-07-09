@@ -33,6 +33,7 @@
       "**/*.node"
     ],
     "mac": {
+      "icon": "build/icon.png",
       "target": [
         {
           "target": "dmg",
