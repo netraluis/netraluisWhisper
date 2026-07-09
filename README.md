@@ -53,6 +53,25 @@ cursor. Open the menubar **🎙** to configure:
 - **Engine:** Local (download a model) or Cloud (paste your Groq/OpenAI key).
 - **Model, language, and the push-to-talk key** — all set from the UI, saved locally.
 
+## Uninstall
+
+**Homebrew:**
+
+```bash
+brew uninstall --cask netraluiswhisper          # remove the app
+brew uninstall --zap --cask netraluiswhisper    # also wipe settings, history, keys, model cache
+```
+
+**Manual (if you downloaded the .dmg):**
+
+1. Quit the app (menubar → Salir), then move `/Applications/netraluisWhisper.app` to the Trash.
+2. Remove local data (settings, history, encrypted keys, downloaded models):
+   ```bash
+   rm -rf ~/Library/Application\ Support/netraluiswhisper
+   ```
+3. Optional — revoke the permissions: System Settings → Privacy & Security → remove
+   **netraluisWhisper** from Microphone, Input Monitoring, and Accessibility.
+
 ## Develop
 
 ```bash
