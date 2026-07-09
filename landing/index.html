@@ -3,169 +3,201 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>netraluisWhisper — dictado por voz local para Mac</title>
-    <meta name="description" content="Mantén una tecla, habla, y el texto se pega donde tengas el cursor. Whisper local (offline, privado) o cloud. macOS." />
+    <title>netraluis whisper — dictado por voz local para Mac</title>
+    <meta name="description" content="Mantienes una tecla, hablas (aunque sea susurrando), y el texto se pega donde tengas el cursor. En local, sin que tu voz salga a ningún servidor. macOS." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%230B5563'/%3E%3Ctext x='50' y='72' font-family='-apple-system,sans-serif' font-size='64' font-weight='700' fill='%23EAF3F4' text-anchor='middle'%3En%3C/text%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono&display=swap" rel="stylesheet" />
     <style>
       :root {
-        --bg: #0b0c0e; --panel: #141519; --line: #24262c; --fg: #eef0f2;
-        --muted: #9a9da4; --accent: #ff453a; --accent2: #5b8cff;
+        --teal: #0B5563; --teal-dark: #062F38; --sand: #F4B860;
+        --fg: #EAF3F4; --muted: #9FBFC5;
+        --border: rgba(255, 255, 255, 0.1); --card: rgba(255, 255, 255, 0.03);
+        --card-hover: rgba(255, 255, 255, 0.06);
+        --font: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html { scroll-behavior: smooth; }
-      body { background: var(--bg); color: var(--fg);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
-        line-height: 1.55; -webkit-font-smoothing: antialiased; }
+      body {
+        color: var(--fg); font-family: var(--font); line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        background:
+          radial-gradient(60% 50% at 50% 0%, rgba(244, 184, 96, 0.10), transparent 70%),
+          radial-gradient(50% 40% at 80% 0%, rgba(255, 255, 255, 0.06), transparent 70%),
+          linear-gradient(165deg, var(--teal), var(--teal-dark));
+        background-attachment: fixed; min-height: 100vh;
+      }
       a { color: inherit; }
       .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
-      header { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
-      header .brand { font-weight: 700; font-size: 16px; }
-      header .brand .dot { color: var(--accent); }
-      header nav a { color: var(--muted); text-decoration: none; font-size: 14px; margin-left: 20px; }
-      header nav a:hover { color: var(--fg); }
 
-      .hero { text-align: center; padding: 72px 0 48px; }
-      .badge { display: inline-block; font-size: 12px; color: var(--muted);
-        border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; margin-bottom: 24px; }
-      .hero h1 { font-size: 52px; line-height: 1.05; letter-spacing: -0.02em; font-weight: 800; }
-      .hero h1 .grad { background: linear-gradient(90deg, #fff, #9fb4ff);
-        -webkit-background-clip: text; background-clip: text; color: transparent; }
-      .hero p.sub { font-size: 19px; color: var(--muted); max-width: 620px; margin: 20px auto 0; }
+      header { display: flex; align-items: center; justify-content: space-between; padding: 24px 0; }
+      .brand { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+      .brand .whisper { color: var(--muted); font-weight: 500; }
+      header nav a { color: var(--muted); text-decoration: none; font-size: 14px; margin-left: 22px; }
+      header nav a:hover { color: var(--sand); }
 
-      .cta { display: flex; gap: 14px; justify-content: center; align-items: center;
-        flex-wrap: wrap; margin-top: 36px; }
+      .hero { text-align: center; padding: 76px 0 52px; }
+      .kicker { display: inline-block; font-size: 12px; text-transform: uppercase;
+        letter-spacing: 0.2em; color: var(--sand); margin-bottom: 26px; }
+      .hero h1 { font-size: 46px; line-height: 1.08; letter-spacing: -0.02em; font-weight: 800; max-width: 720px; margin: 0 auto; }
+      .sandbar { height: 6px; width: 64px; background: var(--sand); border-radius: 999px; margin: 26px auto 0; }
+      .hero p.sub { font-size: 18px; color: var(--muted); max-width: 640px; margin: 26px auto 0; }
+
+      .cta { display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 38px; }
       .btn { display: inline-flex; align-items: center; gap: 9px; text-decoration: none;
-        border-radius: 12px; padding: 14px 22px; font-size: 15px; font-weight: 600; }
-      .btn.primary { background: #fff; color: #0b0c0e; }
-      .btn.primary:hover { transform: translateY(-1px); }
-      .btn.ghost { background: var(--panel); color: var(--fg); border: 1px solid var(--line); }
-      .cmd { display: inline-flex; align-items: center; gap: 12px; background: var(--panel);
-        border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 12px 16px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: #d6d9de; }
-      .cmd button { background: #23252c; color: var(--fg); border: 1px solid var(--line);
-        border-radius: 7px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
-      .cmd button:hover { border-color: #3a3d45; }
-      .hint { font-size: 12.5px; color: var(--muted); margin-top: 16px; }
+        border-radius: 12px; padding: 14px 22px; font-size: 15px; font-weight: 600; transition: transform .15s, border-color .15s; }
+      .btn.primary { background: var(--sand); color: var(--teal-dark); }
+      .btn.primary:hover { transform: translateY(-2px); }
+      .cmd { display: inline-flex; align-items: center; gap: 12px; background: var(--card);
+        border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 12px 16px;
+        font-family: var(--mono); font-size: 13px; color: var(--fg); }
+      .cmd button { background: rgba(255,255,255,0.06); color: var(--fg); border: 1px solid var(--border);
+        border-radius: 7px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-family: var(--font); }
+      .cmd button:hover { border-color: var(--sand); }
+      .hint { font-size: 13px; color: var(--muted); margin-top: 18px; }
 
-      .pill-demo { margin: 44px auto 0; width: fit-content; display: flex; align-items: center; gap: 10px;
-        background: rgba(20,20,22,.9); border: 1px solid var(--line); color: #fff;
-        padding: 11px 18px; border-radius: 999px; font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
-      .pill-demo .rec { width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
-        animation: pulse 1.1s infinite; }
-      @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.75); } }
+      .pill-demo { margin: 46px auto 0; width: fit-content; display: flex; align-items: center; gap: 10px;
+        background: rgba(6, 47, 56, 0.6); border: 1px solid var(--border); color: var(--fg);
+        padding: 11px 18px; border-radius: 999px; font-size: 14px; }
+      .pill-demo .rec { width: 10px; height: 10px; border-radius: 50%; background: var(--sand); animation: pulse 1.2s infinite; }
+      @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
 
-      section { padding: 40px 0; }
+      section { padding: 44px 0; }
+      .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--sand);
+        display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+      .section-title::before { content: ""; height: 2px; width: 22px; background: var(--sand); border-radius: 2px; }
+
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
-      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
-      .card h3 { font-size: 16px; margin-bottom: 8px; }
+      .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px;
+        transition: transform .18s, border-color .18s, background .18s; }
+      .card:hover { transform: translateY(-2px); border-color: var(--sand); background: var(--card-hover); }
+      .card h3 { font-size: 16px; margin-bottom: 8px; font-weight: 600; }
       .card p { color: var(--muted); font-size: 14px; }
-      .card .ic { font-size: 22px; margin-bottom: 12px; }
-
-      h2.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
-        color: var(--muted); margin-bottom: 20px; }
 
       .steps { display: grid; gap: 12px; }
-      .step { display: flex; gap: 14px; align-items: flex-start; background: var(--panel);
-        border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
-      .step .n { flex: none; width: 26px; height: 26px; border-radius: 50%; background: #23252c;
-        display: grid; place-items: center; font-size: 13px; font-weight: 700; }
-      .step code { background: #0b0c0e; border: 1px solid var(--line); border-radius: 6px;
-        padding: 2px 7px; font-size: 13px; }
+      .step { display: flex; gap: 15px; align-items: flex-start; background: var(--card);
+        border: 1px solid var(--border); border-radius: 14px; padding: 17px 19px; }
+      .step .n { flex: none; width: 26px; height: 26px; border-radius: 50%; background: rgba(244,184,96,0.15);
+        color: var(--sand); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+      .step code, code.inline { font-family: var(--mono); background: rgba(0,0,0,0.25);
+        border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; font-size: 13px; }
 
-      footer { border-top: 1px solid var(--line); padding: 30px 0 50px; color: var(--muted); font-size: 13px;
+      .note-block { background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+        padding: 22px 24px; color: var(--muted); font-size: 15px; }
+      .note-block strong { color: var(--fg); }
+
+      footer { border-top: 1px solid var(--border); padding: 30px 0 54px; color: var(--muted); font-size: 13px;
         display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-      footer a { color: var(--muted); text-decoration: none; }
-      footer a:hover { color: var(--fg); }
+      footer a { color: var(--muted); text-decoration: none; text-underline-offset: 4px; }
+      footer a:hover { color: var(--sand); text-decoration: underline; }
 
-      @media (max-width: 600px) { .hero h1 { font-size: 38px; } }
+      .fade { opacity: 0; transform: translateY(12px); animation: fadeup .6s ease forwards; }
+      @keyframes fadeup { to { opacity: 1; transform: none; } }
+      @media (prefers-reduced-motion: reduce) { .fade { animation: none; opacity: 1; transform: none; } .pill-demo .rec { animation: none; } }
+      @media (max-width: 600px) { .hero h1 { font-size: 34px; } }
     </style>
   </head>
   <body>
     <div class="wrap">
       <header>
-        <div class="brand"><span class="dot">●</span> netraluisWhisper</div>
+        <div class="brand">netraluis <span class="whisper">whisper</span></div>
         <nav>
-          <a href="#features">Qué hace</a>
-          <a href="#install">Instalar</a>
+          <a href="#que-hace">Qué hace</a>
+          <a href="#instalar">Instalar</a>
           <a href="https://github.com/netraluis/netraluisWhisper" target="_blank" rel="noopener">GitHub</a>
         </nav>
       </header>
 
-      <div class="hero">
-        <span class="badge">macOS · Apple Silicon · open source</span>
-        <h1>Habla. <span class="grad">Aparece el texto.</span></h1>
+      <div class="hero fade">
+        <span class="kicker">netraluis · open source</span>
+        <h1>Hablas, y el texto aparece donde tengas el cursor.</h1>
+        <div class="sandbar"></div>
         <p class="sub">
-          Mantén una tecla, dicta, y la transcripción se pega donde tengas el cursor —
-          terminal, editor, navegador, cualquier app. Coge hasta los susurros.
+          Lo hice para mí: dictar en el Mac sin que mi voz salga a ningún servidor.
+          Mantienes una tecla, hablas —aunque sea susurrando—, sueltas, y se pega en la
+          terminal, el editor, el navegador, donde estés. En local (gratis, offline) o con
+          tu propia API si la prefieres.
         </p>
-
         <div class="cta">
           <a class="btn primary" href="https://github.com/netraluis/netraluisWhisper/releases/latest/download/netraluisWhisper.dmg">
-            ⬇ Descargar para Mac
+            Descargar para Mac
           </a>
           <span class="cmd">
             <span id="brewcmd">brew install --cask netraluis/tap/netraluiswhisper</span>
             <button onclick="copyBrew()">Copiar</button>
           </span>
         </div>
-        <div class="hint">Gratis. Corre en tu Mac. Descarga o instala por terminal — tú eliges.</div>
+        <div class="hint">Gratis y open source. macOS · Apple Silicon.</div>
 
         <div class="pill-demo"><span class="rec"></span> Escuchando…</div>
       </div>
 
-      <section id="features">
-        <h2 class="section-title">Qué hace</h2>
+      <section id="que-hace" class="fade">
+        <div class="section-title">Qué hace</div>
         <div class="grid">
           <div class="card">
-            <div class="ic">🔒</div>
-            <h3>Local o cloud, tú decides</h3>
-            <p>Modelos Whisper abiertos 100% en tu Mac (gratis, offline, privado, con GPU),
-              o una API cloud (Groq / OpenAI) con tu propia key.</p>
+            <h3>Local o cloud, tú eliges</h3>
+            <p>El caso es que no siempre quieres depender de internet. Corre modelos Whisper
+              abiertos en tu propio Mac (gratis, offline, con GPU), o usa una API cloud
+              (Groq / OpenAI) con tu propia key si buscas otra cosa.</p>
           </div>
           <div class="card">
-            <div class="ic">🎙️</div>
-            <h3>Susurros incluidos</h3>
-            <p>Mantén la tecla, habla bajito, suelta. El texto sale limpio y se pega solo
-              en la app que tengas delante.</p>
+            <h3>Coge hasta los susurros</h3>
+            <p>Mantienes la tecla, hablas bajito, sueltas. El texto sale limpio y se pega solo
+              en la app que tengas delante. Sin ventana intermedia, sin copiar-pegar.</p>
           </div>
           <div class="card">
-            <div class="ic">🔑</div>
             <h3>Tu key, tu máquina</h3>
-            <p>Las API keys se guardan cifradas en el Keychain de macOS. Nada sale de tu
-              equipo salvo al proveedor que elijas.</p>
+            <p>Si usas cloud, la key se guarda cifrada en el Keychain de macOS. Nada sale de tu
+              equipo salvo al proveedor que tú elijas. En local, ni eso.</p>
           </div>
           <div class="card">
-            <div class="ic">🕘</div>
-            <h3>Historial + insight</h3>
-            <p>Cada dictado queda en local. Recupéralo, re-pégalo, y mira en qué apps y
-              cuánto has dictado.</p>
+            <h3>Historial e insight</h3>
+            <p>Cada dictado queda en local. Lo recuperas, lo vuelves a pegar, y ves en qué apps
+              y cuánto has dictado. Los datos son tuyos y se quedan en tu Mac.</p>
           </div>
         </div>
       </section>
 
-      <section id="install">
-        <h2 class="section-title">Instalar</h2>
+      <section id="instalar" class="fade">
+        <div class="section-title">Instalar</div>
         <div class="steps">
           <div class="step"><div class="n">1</div>
             <div><strong>Descarga</strong> el <code>.dmg</code>, ábrelo y arrastra la app a Aplicaciones.
               <br />O por terminal: <code>brew install --cask netraluis/tap/netraluiswhisper</code></div></div>
           <div class="step"><div class="n">2</div>
-            <div><strong>Primera vez</strong> (app sin firmar, macOS la bloquea):
+            <div><strong>Primera vez</strong> (la app no está firmada, así que macOS la bloquea):
               <br /><code>xattr -dr com.apple.quarantine /Applications/netraluisWhisper.app</code>
-              <br />y ábrela. (Con Homebrew este paso no hace falta.)</div></div>
+              <br />y ábrela. Con Homebrew este paso no hace falta.</div></div>
           <div class="step"><div class="n">3</div>
-            <div><strong>Concede permisos</strong> cuando macOS pida: Micrófono, Input Monitoring y Accesibilidad.</div></div>
+            <div><strong>Da permisos</strong> cuando macOS los pida: Micrófono, Input Monitoring y Accesibilidad.</div></div>
           <div class="step"><div class="n">4</div>
-            <div><strong>Dicta.</strong> Mantén Cmd derecho, habla, suelta. Configura motor, modelo,
-              idioma y tecla desde el icono 🎙 del menubar.</div></div>
+            <div><strong>Dicta.</strong> Mantén Cmd derecho, habla, suelta. Configura motor, modelo, idioma y
+              tecla desde el icono del menubar.</div></div>
+        </div>
+      </section>
+
+      <section class="fade">
+        <div class="section-title">Por qué existe</div>
+        <div class="note-block">
+          Para darte contexto: quería dictar en el Mac como se dicta en el móvil, pero sin
+          mandar mi voz a la nube de nadie. No encontré algo que fuera <strong>local de
+          verdad</strong> y a la vez abierto, así que lo construí. Lo hago <strong>a mi
+          rollo</strong> y en abierto — si te sirve, genial; si quieres cambiar algo, el
+          código está en GitHub.
         </div>
       </section>
 
       <footer>
-        <span>netraluisWhisper · MIT</span>
+        <span>netraluis whisper · MIT</span>
         <span>
           <a href="https://github.com/netraluis/netraluisWhisper" target="_blank" rel="noopener">Código en GitHub</a>
           &nbsp;·&nbsp;
           <a href="https://github.com/netraluis/netraluisWhisper/releases" target="_blank" rel="noopener">Releases</a>
+          &nbsp;·&nbsp;
+          <a href="https://netraluis.com" target="_blank" rel="noopener">netraluis.com</a>
         </span>
       </footer>
     </div>
@@ -173,7 +205,7 @@
     <script>
       function copyBrew() {
         navigator.clipboard.writeText(document.getElementById('brewcmd').textContent)
-        const b = event.target; const t = b.textContent; b.textContent = 'Copiado ✓'
+        const b = event.target; const t = b.textContent; b.textContent = 'Copiado'
         setTimeout(() => (b.textContent = t), 1400)
       }
     </script>
