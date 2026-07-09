@@ -4,7 +4,7 @@ Local push-to-talk voice dictation for macOS, Wispr Flow style. Hold a key, spea
 release, and the transcription is pasted wherever your cursor is — terminal, editor,
 browser, any app.
 
-**Website:** https://landing-ruddy-one-99.vercel.app
+**Website:** https://whisper.netraluis.com
 
 - **Local or cloud, your choice.** Run open Whisper models fully on-device (free,
   offline, private, WebGPU-accelerated) or use a cloud API (Groq / OpenAI) with your own key.
