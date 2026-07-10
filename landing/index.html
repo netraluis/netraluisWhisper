@@ -175,11 +175,21 @@
       </section>
 
       <section class="fade">
-        <div class="section-title">Así se ve</div>
-        <div class="appshot">
-          <img src="shot-app.png" alt="Panel de configuración: motor local o cloud, modelo, tecla, key e insight" />
+        <div class="section-title">Ajústalo a tu gusto</div>
+        <div class="grid" style="align-items:center; gap:28px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+          <div class="appshot" style="box-shadow:0 20px 50px rgba(0,0,0,0.4)">
+            <img src="shot-app.png" alt="Panel de ajustes: motor local o cloud, modelo, idioma, tecla, key e insight" />
+          </div>
+          <div>
+            <p style="color:var(--fg); font-size:16px; margin-bottom:16px">El panel de ajustes (se abre desde el menubar) es donde mandas tú:</p>
+            <ul style="list-style:none; padding:0; display:flex; flex-direction:column; gap:12px; color:var(--muted); font-size:15px">
+              <li><strong style="color:var(--fg)">Motor y modelo.</strong> Local (Whisper en tu Mac) o cloud (Groq / OpenAI), y el modelo que quieras.</li>
+              <li><strong style="color:var(--fg)">La tecla.</strong> Pulsa "Cambiar tecla" y elige la que te vaya para hablar.</li>
+              <li><strong style="color:var(--fg)">Tu API key.</strong> Si usas cloud, se guarda cifrada en el Keychain. Nunca en un archivo.</li>
+              <li><strong style="color:var(--fg)">Historial e insight.</strong> Cada dictado queda guardado; lo re-pegas y ves en qué apps y cuánto dictas.</li>
+            </ul>
+          </div>
         </div>
-        <p class="caption">Eliges motor y modelo, metes tu key, cambias la tecla, y ves tu historial e insight. Todo en tu Mac.</p>
       </section>
 
       <section id="instalar" class="fade">
