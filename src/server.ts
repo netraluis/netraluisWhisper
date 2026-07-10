@@ -24,6 +24,8 @@ export interface ServerApi {
   getModelStatus: () => ModelStatus
   startHotkeyCapture: () => void
   openPrivacyPane: (pane: string) => void
+  getUpdate: () => { current: string; updateAvailable: boolean; latest: string; url: string }
+  openReleasePage: () => void
   repaste: (text: string) => void
 }
 
@@ -100,6 +102,12 @@ export function startServer(port: number, api: ServerApi): Promise<number> {
 
   server.post('/api/open-privacy', (req, res) => {
     api.openPrivacyPane(String(req.body?.pane || ''))
+    res.json({ ok: true })
+  })
+
+  server.get('/api/update', (_req, res) => res.json(api.getUpdate()))
+  server.post('/api/update/open', (_req, res) => {
+    api.openReleasePage()
     res.json({ ok: true })
   })
 

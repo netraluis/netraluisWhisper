@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, clipboard, systemPreferences, screen, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, clipboard, systemPreferences, screen, Tray, Menu, nativeImage, shell } from 'electron'
 import { uIOhook } from 'uiohook-napi'
 import { exec } from 'child_process'
 import * as path from 'path'
@@ -69,6 +69,38 @@ let settings: Settings = { ...DEFAULT_SETTINGS }
 const DEBUG_KEYS = process.env.DEBUG_KEYS === '1'
 const PORT = Number(process.env.PORT || 8765)
 let captureHotkey = false // when true, next keypress sets the trigger key
+let updateInfo: { latest: string; url: string } | null = null
+
+const REPO = 'netraluis/netraluisWhisper'
+
+function isNewer(latest: string, current: string): boolean {
+  const a = latest.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
+  const b = current.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0)
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] || 0, y = b[i] || 0
+    if (x > y) return true
+    if (x < y) return false
+  }
+  return false
+}
+
+// Check GitHub for a newer release. Silent on any failure (offline, rate limit).
+async function checkForUpdate() {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+      headers: { 'User-Agent': 'netraluisWhisper', Accept: 'application/vnd.github+json' },
+    })
+    if (!res.ok) return
+    const data = (await res.json()) as { tag_name?: string; html_url?: string }
+    const latest = (data.tag_name || '').replace(/^v/, '')
+    if (latest && isNewer(latest, app.getVersion())) {
+      updateInfo = { latest, url: data.html_url || `https://github.com/${REPO}/releases/latest` }
+      console.log('[update] nueva versión disponible:', latest)
+    }
+  } catch {
+    /* offline / rate-limited: ignore */
+  }
+}
 
 let win: BrowserWindow | null = null // overlay pill + mic
 let inferWin: BrowserWindow | null = null // dedicated local-inference window
@@ -198,6 +230,7 @@ if (!app.requestSingleInstanceLock()) {
     setupTray()
     createConfigWindow() // show the UI in our own window on launch
     banner()
+    checkForUpdate() // non-blocking; result surfaced in the UI if newer
   })
 }
 
@@ -315,6 +348,15 @@ async function startWebUi() {
     getModelStatus: () => ({ ready: inferReadyModel, loading: inferLoading, error: inferError }),
     startHotkeyCapture: () => { captureHotkey = true },
     openPrivacyPane: (pane) => openPrivacyPane(pane),
+    getUpdate: () => ({
+      current: app.getVersion(),
+      updateAvailable: !!updateInfo,
+      latest: updateInfo?.latest || '',
+      url: updateInfo?.url || '',
+    }),
+    openReleasePage: () => {
+      if (updateInfo?.url) shell.openExternal(updateInfo.url)
+    },
     repaste: (text) => repasteWithDelay(text),
   })
   console.log('web UI (own window):', `http://127.0.0.1:${boundPort}`)

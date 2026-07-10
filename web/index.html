@@ -66,6 +66,13 @@
     </header>
 
     <div class="wrap">
+      <div class="panel" id="updateBanner" style="display:none; border-color:#5b8cff; background:rgba(91,140,255,0.08)">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap">
+          <span>Hay una versión nueva: <strong id="ub-latest"></strong>. Tienes la <span id="ub-current"></span>.</span>
+          <button class="btn" style="border-color:#5b8cff" onclick="openRelease()">Descargar</button>
+        </div>
+      </div>
+
       <div class="panel" id="onboarding" style="border-color:#3a3d45">
         <h2>Primeros pasos</h2>
         <div id="ob-steps" style="display:flex; flex-direction:column; gap:10px">
@@ -418,8 +425,21 @@
         return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
       }
 
+      async function checkUpdate() {
+        const u = await fetch('/api/update').then((r) => r.json()).catch(() => null)
+        if (u && u.updateAvailable) {
+          document.getElementById('ub-latest').textContent = 'v' + u.latest
+          document.getElementById('ub-current').textContent = 'v' + u.current
+          document.getElementById('updateBanner').style.display = 'block'
+        }
+      }
+      async function openRelease() {
+        await fetch('/api/update/open', { method: 'POST' })
+      }
+
       function loadAll() { loadSettings(); loadHistory() }
       loadAll()
+      checkUpdate()
       setInterval(loadHistory, 4000)
     </script>
   </body>
