@@ -95,6 +95,12 @@
       footer a { color: var(--muted); text-decoration: none; text-underline-offset: 4px; }
       footer a:hover { color: var(--sand); text-decoration: underline; }
 
+      .showcase { text-align: center; padding: 6px 0 28px; }
+      .showcase img { max-width: 100%; border-radius: 14px; }
+      .appshot { max-width: 760px; margin: 0 auto; border: 1px solid var(--border);
+        border-radius: 16px; overflow: hidden; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4); }
+      .appshot img { display: block; width: 100%; }
+      .caption { text-align: center; font-size: 13px; color: var(--muted); margin-top: 16px; }
       .fade { opacity: 0; transform: translateY(12px); animation: fadeup .6s ease forwards; }
       @keyframes fadeup { to { opacity: 1; transform: none; } }
       @media (prefers-reduced-motion: reduce) { .fade { animation: none; opacity: 1; transform: none; } .pill-demo .rec { animation: none; } }
@@ -137,6 +143,10 @@
         <div class="pill-demo"><span class="rec"></span> Escuchando…</div>
       </div>
 
+      <div class="showcase fade">
+        <img src="shot-terminal.png" alt="Dictas y el texto se pega en la terminal, con la píldora Pegado" />
+      </div>
+
       <section id="que-hace" class="fade">
         <div class="section-title">Qué hace</div>
         <div class="grid">
@@ -162,6 +172,14 @@
               y cuánto has dictado. Los datos son tuyos y se quedan en tu Mac.</p>
           </div>
         </div>
+      </section>
+
+      <section class="fade">
+        <div class="section-title">Así se ve</div>
+        <div class="appshot">
+          <img src="shot-app.png" alt="Panel de configuración: motor local o cloud, modelo, tecla, key e insight" />
+        </div>
+        <p class="caption">Eliges motor y modelo, metes tu key, cambias la tecla, y ves tu historial e insight. Todo en tu Mac.</p>
       </section>
 
       <section id="instalar" class="fade">
