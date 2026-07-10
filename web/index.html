@@ -391,6 +391,7 @@
               <span>${fmtTime(e.ts)}</span>
               <span class="tag">${e.provider} · ${escapeHtml(e.model)}</span>
               ${e.appName ? `<span class="tag">${escapeHtml(e.appName)}</span>` : ''}
+              ${e.ms ? `<span class="tag">${(e.ms / 1000).toFixed(1)}s</span>` : ''}
               <div class="actions">
                 <button class="btn" onclick='copyText(${JSON.stringify(e.text)})'>Copiar</button>
                 <button class="btn" onclick='repaste(${JSON.stringify(e.text)})'>Re-pegar</button>

@@ -13,6 +13,7 @@ env.backends.onnx.wasm.numThreads = 1
 const bridge = window.bridge
 let pipe = null
 let currentModel = ''
+let lastDevice = ''
 
 async function pickDevice() {
   if (!('gpu' in navigator)) return 'wasm'
@@ -26,7 +27,7 @@ async function pickDevice() {
 
 bridge.onLoadModel(async ({ model }) => {
   if (model === currentModel && pipe) {
-    bridge.ready({ model })
+    bridge.ready({ model, device: lastDevice })
     return
   }
   try {
@@ -48,7 +49,8 @@ bridge.onLoadModel(async ({ model }) => {
     // Warm-up: a throwaway inference so the user's first real dictation is fast.
     await pipe(new Float32Array(16000), { language: 'es', task: 'transcribe' })
     currentModel = model
-    bridge.ready({ model })
+    lastDevice = device
+    bridge.ready({ model, device })
   } catch (e) {
     pipe = null
     currentModel = ''

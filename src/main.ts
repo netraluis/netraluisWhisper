@@ -113,6 +113,7 @@ let pendingApp = ''
 
 // Local inference state (reported by inferWin).
 let inferReadyModel = '' // which model is currently loaded+warm
+let inferBackend = '' // webgpu | wasm — reported by the inference window
 let inferLoading: { model: string; progress: number } | null = null
 let inferError = ''
 let pendingInfer: ((r: { text?: string; error?: string }) => void) | null = null
@@ -239,11 +240,12 @@ function setupInferIpc() {
   ipcMain.on('model-progress', (_e, d: { model: string; progress: number }) => {
     inferLoading = d
   })
-  ipcMain.on('model-ready', (_e, d: { model: string }) => {
+  ipcMain.on('model-ready', (_e, d: { model: string; device?: string }) => {
     inferReadyModel = d.model
+    inferBackend = d.device || ''
     inferLoading = null
     inferError = ''
-    console.log('[local] model ready:', d.model)
+    console.log(`[local] model ready: ${d.model}${d.device ? ' [' + d.device + ']' : ''}`)
   })
   ipcMain.on('model-error', (_e, d: { error: string }) => {
     inferLoading = null
@@ -434,6 +436,8 @@ ipcMain.on('audio-pcm', async (_evt, buf: ArrayBuffer, len: number) => {
   const provider = PROVIDERS[settings.provider]
   let usedProvider = settings.provider
   let usedModel = settings.model
+  const audioSec = pcm.length / SAMPLE_RATE
+  const t0 = Date.now()
   try {
     let text = ''
     if (provider?.kind === 'local') {
@@ -457,12 +461,17 @@ ipcMain.on('audio-pcm', async (_evt, buf: ArrayBuffer, len: number) => {
     }
 
     if (text) {
+      const ms = Date.now() - t0
       pasteText(text)
+      const words = text.trim().split(/\s+/).filter(Boolean).length
       addEntry({
         ts: Date.now(), text, provider: usedProvider, model: usedModel,
-        lang: settings.language, ms: 0, appName: pendingApp || undefined,
+        lang: settings.language, ms, appName: pendingApp || undefined,
       })
-      console.log('pasted:', JSON.stringify(text))
+      const backend = usedProvider === 'local' && inferBackend ? ` [${inferBackend}]` : ''
+      console.log(
+        `[stt] ${usedProvider}/${usedModel} · ${audioSec.toFixed(1)}s audio → ${ms}ms · ${words} palabras${backend}`
+      )
       doneOverlay() // "Pegado ✓"
     } else {
       console.log('(no speech detected)')
