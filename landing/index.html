@@ -95,9 +95,31 @@
       footer a { color: var(--muted); text-decoration: none; text-underline-offset: 4px; }
       footer a:hover { color: var(--sand); text-decoration: underline; }
 
-      .showcase { text-align: center; padding: 6px 0 28px; }
-      .showcase img { max-width: 760px; width: 100%; border-radius: 16px;
-        border: 1px solid var(--border); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4); }
+      .showcase { padding: 6px 0 28px; }
+      .demo { max-width: 720px; margin: 0 auto; }
+      .demo-win { border-radius: 16px; overflow: hidden; background: #0d1117;
+        border: 1px solid var(--border); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4); text-align: left; }
+      .demo-bar { display: flex; align-items: center; gap: 8px; padding: 12px 15px;
+        background: #161b22; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+      .demo-bar .d { width: 12px; height: 12px; border-radius: 50%; }
+      .demo-bar .r { background: #ff5f57; } .demo-bar .y { background: #febc2e; } .demo-bar .g { background: #28c840; }
+      .demo-bar .dt { margin-left: 10px; color: #8b949e; font-size: 12.5px; }
+      .demo-body { padding: 24px 24px 30px; font-family: var(--mono); font-size: 15px; line-height: 1.9;
+        color: #c9d1d9; min-height: 100px; }
+      .dpath { color: #58a6ff; } .dprompt { color: var(--sand); } .ddim { color: #6e7681; } .dtyped { color: #eaf3f4; }
+      .dcursor { display: inline-block; width: 8px; height: 17px; background: var(--sand);
+        margin-left: 2px; vertical-align: -3px; animation: blink 1s step-end infinite; }
+      @keyframes blink { 50% { opacity: 0; } }
+      .demo-pill { margin: -18px auto 0; width: fit-content; display: flex; align-items: center; gap: 10px;
+        background: rgba(20, 20, 22, 0.94); color: #fff; padding: 11px 18px; border-radius: 999px;
+        font-size: 14px; font-weight: 500; box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.08); position: relative; z-index: 2; }
+      .demo-pill .dp { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+      .demo-pill.rec .dp { background: #ff453a; animation: pulse 1.1s infinite; }
+      .demo-pill.conv .dp { background: transparent; border: 2px solid rgba(255,255,255,0.25);
+        border-top-color: #fff; animation: spin .7s linear infinite; }
+      .demo-pill.done .dp { background: var(--sand); }
+      @keyframes spin { to { transform: rotate(360deg); } }
       .appshot { max-width: 760px; margin: 0 auto; border: 1px solid var(--border);
         border-radius: 16px; overflow: hidden; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4); }
       .appshot img { display: block; width: 100%; }
@@ -145,7 +167,19 @@
       </div>
 
       <div class="showcase fade">
-        <img src="shot-terminal.png" alt="Dictas y el texto se pega en la terminal, con la píldora Pegado" />
+        <div class="demo">
+          <div class="demo-win">
+            <div class="demo-bar">
+              <span class="d r"></span><span class="d y"></span><span class="d g"></span>
+              <span class="dt">proyecto — zsh</span>
+            </div>
+            <div class="demo-body">
+              <div><span class="dpath">~/proyecto</span> <span class="dprompt">❯</span> git commit -m <span class="ddim">"</span></div>
+              <div><span class="dtyped" id="demoText"></span><span class="ddim" id="demoQuote" style="opacity:0">"</span><span class="dcursor"></span></div>
+            </div>
+          </div>
+          <div class="demo-pill rec" id="demoPill"><span class="dp"></span> <span id="demoPillText">Escuchando…</span></div>
+        </div>
       </div>
 
       <section id="que-hace" class="fade">
@@ -253,6 +287,28 @@
         const b = event.target; const t = b.textContent; b.textContent = 'Copiado'
         setTimeout(() => (b.textContent = t), 1400)
       }
+
+      // Live demo loop: Escuchando -> Convirtiendo (text streams in) -> Pegado -> repeat.
+      (function demoLoop() {
+        const phrase = 'arregla el login cuando la sesión expira y redirige a /entrar'
+        const pill = document.getElementById('demoPill')
+        const pillText = document.getElementById('demoPillText')
+        const textEl = document.getElementById('demoText')
+        const quote = document.getElementById('demoQuote')
+        if (!pill) return
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+        const setPill = (cls, txt) => { pill.className = 'demo-pill ' + cls; pillText.textContent = txt }
+        async function run() {
+          while (true) {
+            setPill('rec', 'Escuchando…'); textEl.textContent = ''; quote.style.opacity = '0'; await sleep(1400)
+            setPill('conv', 'Convirtiendo tu voz…'); await sleep(600)
+            for (let i = 0; i <= phrase.length; i++) { textEl.textContent = phrase.slice(0, i); await sleep(26) }
+            quote.style.opacity = '1'; setPill('done', 'Pegado ✓'); await sleep(2000)
+          }
+        }
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) run()
+        else { textEl.textContent = phrase; quote.style.opacity = '1'; setPill('done', 'Pegado ✓') }
+      })()
     </script>
   </body>
 </html>
