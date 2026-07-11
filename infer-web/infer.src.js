@@ -58,6 +58,21 @@ bridge.onLoadModel(async ({ model }) => {
   }
 })
 
+// Repair a corrupt/interrupted model download: wipe the browser model cache,
+// reset state, and tell main so it can re-download fresh.
+bridge.onClearCache(async ({ model }) => {
+  try {
+    const keys = await caches.keys()
+    await Promise.all(keys.map((k) => caches.delete(k)))
+    pipe = null
+    currentModel = ''
+    lastDevice = ''
+    bridge.cacheCleared({ model })
+  } catch (e) {
+    bridge.error({ error: 'no se pudo limpiar la caché: ' + String(e?.message || e) })
+  }
+})
+
 bridge.onInfer(async ({ audio, language }) => {
   if (!pipe) {
     bridge.result({ error: 'model not loaded' })

@@ -142,6 +142,7 @@
             <label>Modelo local (gratis, offline, privado)</label>
             <div class="keyrow">
               <button class="btn" id="activateBtn" onclick="activateModel()">Descargar y activar</button>
+              <button class="btn" onclick="resetModel()" title="Limpia la caché y vuelve a descargar (si se cortó o se corrompió)">Descargar de nuevo</button>
               <span class="note muted" id="modelStatus" style="margin:0"></span>
             </div>
             <div class="progress" id="progressWrap" style="display:none"><div id="progressBar"></div></div>
@@ -326,6 +327,17 @@
           body: JSON.stringify({ model }),
         })
         toast('Descargando/activando modelo…')
+        startStatusPolling()
+      }
+
+      async function resetModel() {
+        const model = document.getElementById('model').value
+        if (!confirm('¿Borrar la caché de este modelo y descargarlo de nuevo?')) return
+        await fetch('/api/model/reset', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model }),
+        })
+        toast('Limpiando caché y descargando de nuevo…')
         startStatusPolling()
       }
 

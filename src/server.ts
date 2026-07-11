@@ -21,6 +21,7 @@ export interface ServerApi {
   getProviders: () => Record<string, ProviderInfo>
   setKey: (provider: string, key: string) => void
   loadLocalModel: (model: string) => void
+  resetLocalModel: (model: string) => void
   getModelStatus: () => ModelStatus
   startHotkeyCapture: () => void
   openPrivacyPane: (pane: string) => void
@@ -93,6 +94,17 @@ export function startServer(port: number, api: ServerApi): Promise<number> {
     res.json({ ok: true })
   })
   server.get('/api/model/status', (_req, res) => res.json(api.getModelStatus()))
+
+  // Repair: wipe cache + re-download the model (for a corrupt/interrupted download).
+  server.post('/api/model/reset', (req, res) => {
+    const model = String(req.body?.model || '')
+    if (!model) {
+      res.status(400).json({ error: 'model required' })
+      return
+    }
+    api.resetLocalModel(model)
+    res.json({ ok: true })
+  })
 
   // Arm hotkey capture: the next global keypress becomes the push-to-talk key.
   server.post('/api/hotkey/capture', (_req, res) => {

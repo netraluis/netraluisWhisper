@@ -9,9 +9,12 @@ contextBridge.exposeInMainWorld('bridge', {
     ipcRenderer.on('load-model', (_e, d) => cb(d)),
   onInfer: (cb: (d: { audio: Float32Array; language: string }) => void) =>
     ipcRenderer.on('infer', (_e, d) => cb(d)),
+  onClearCache: (cb: (d: { model: string }) => void) =>
+    ipcRenderer.on('clear-cache', (_e, d) => cb(d)),
   // page -> main
   progress: (d: { model: string; progress: number }) => ipcRenderer.send('model-progress', d),
-  ready: (d: { model: string }) => ipcRenderer.send('model-ready', d),
+  ready: (d: { model: string; device?: string }) => ipcRenderer.send('model-ready', d),
   error: (d: { error: string }) => ipcRenderer.send('model-error', d),
   result: (d: { text?: string; error?: string }) => ipcRenderer.send('infer-result', d),
+  cacheCleared: (d: { model: string }) => ipcRenderer.send('cache-cleared', d),
 })

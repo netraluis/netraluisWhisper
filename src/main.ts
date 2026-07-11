@@ -133,6 +133,7 @@ function createOverlay() {
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
 }
 
+let inferRelaunches = 0
 function createInferWindow() {
   // Opaque, no nodeIntegration, http origin => web backend + WebGPU + model cache.
   inferWin = new BrowserWindow({
@@ -143,6 +144,26 @@ function createInferWindow() {
     },
   })
   inferWin.loadURL(`http://127.0.0.1:${boundPort}/infer/`)
+
+  // Resilience: a big model can crash the render process (GPU device-loss / OOM).
+  // Don't die silently — reset state, tell the user, and relaunch the window.
+  inferWin.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[local] inference window crashed:', details.reason)
+    const msg = 'El modelo se quedó sin memoria. Prueba uno menor.'
+    inferReadyModel = ''
+    inferBackend = ''
+    inferLoading = null
+    inferError = msg
+    if (pendingInfer) {
+      const cb = pendingInfer
+      pendingInfer = null
+      cb({ error: msg })
+    }
+    if (inferRelaunches < 5) {
+      inferRelaunches++
+      setTimeout(() => { try { inferWin?.destroy() } catch {} ; createInferWindow() }, 500)
+    }
+  })
 }
 
 // The config/history UI, in the app's own window (no external browser).
@@ -257,6 +278,20 @@ function setupInferIpc() {
     pendingInfer = null
     cb?.(r)
   })
+  ipcMain.on('cache-cleared', (_e, d: { model: string }) => {
+    console.log('[local] cache cleared, re-downloading', d.model)
+    inferReadyModel = ''
+    loadLocalModel(d.model) // fresh download + load
+  })
+}
+
+// Wipe the model cache and re-download (repairs a corrupt/interrupted download).
+function resetLocalModel(model: string) {
+  if (!inferWin) return
+  inferError = ''
+  inferReadyModel = inferReadyModel === model ? '' : inferReadyModel
+  inferLoading = { model, progress: 0 }
+  inferWin.webContents.send('clear-cache', { model })
 }
 
 function loadLocalModel(model: string) {
@@ -347,6 +382,7 @@ async function startWebUi() {
       ),
     setKey: (provider, key) => saveKey(provider, key),
     loadLocalModel: (model) => loadLocalModel(model),
+    resetLocalModel: (model) => resetLocalModel(model),
     getModelStatus: () => ({ ready: inferReadyModel, loading: inferLoading, error: inferError }),
     startHotkeyCapture: () => { captureHotkey = true },
     openPrivacyPane: (pane) => openPrivacyPane(pane),
