@@ -32,13 +32,24 @@
       a { color: inherit; }
       .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
 
-      header { display: flex; align-items: center; justify-content: space-between; padding: 24px 0; }
+      header { position: relative; display: flex; align-items: center; justify-content: space-between; padding: 24px 0; }
       .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
       .brand img { height: 26px; width: 26px; display: block; }
       .brand .whisper { color: var(--muted); font-weight: 500; }
       .hero-logo { height: 60px; width: 60px; margin: 0 auto 24px; display: block; }
       header nav a { color: var(--muted); text-decoration: none; font-size: 14px; margin-left: 22px; }
       header nav a:hover { color: var(--sand); }
+      .menu-btn { display: none; background: none; border: 0; color: var(--fg); font-size: 24px;
+        line-height: 1; cursor: pointer; padding: 4px 8px; }
+      @media (max-width: 640px) {
+        .menu-btn { display: block; }
+        header nav { position: absolute; top: 100%; right: 0; z-index: 20; display: none;
+          flex-direction: column; align-items: flex-end; gap: 2px;
+          background: #072a31; border: 1px solid var(--border); border-radius: 12px;
+          padding: 10px 16px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); min-width: 160px; }
+        header nav.open { display: flex; }
+        header nav a { margin: 0; padding: 9px 0; font-size: 15px; }
+      }
 
       .hero { text-align: center; padding: 76px 0 52px; }
       .kicker { display: inline-block; font-size: 12px; text-transform: uppercase;
@@ -134,7 +145,8 @@
     <div class="wrap">
       <header>
         <div class="brand"><img src="logo.svg" alt="" /> netraluis <span class="whisper">whisper</span></div>
-        <nav>
+        <button class="menu-btn" aria-label="Menú" onclick="toggleMenu()">☰</button>
+        <nav id="nav" onclick="closeMenu()">
           <a href="#que-hace">Qué hace</a>
           <a href="#instalar">Instalar</a>
           <a href="https://github.com/netraluis/netraluisWhisper" target="_blank" rel="noopener">GitHub</a>
@@ -282,6 +294,9 @@
     </div>
 
     <script>
+      function toggleMenu() { document.getElementById('nav').classList.toggle('open') }
+      function closeMenu() { document.getElementById('nav').classList.remove('open') }
+
       function copyBrew() {
         navigator.clipboard.writeText(document.getElementById('brewcmd').textContent)
         const b = event.target; const t = b.textContent; b.textContent = 'Copiado'
