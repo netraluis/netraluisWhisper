@@ -94,6 +94,8 @@
       .section-title::before { content: ""; height: 2px; width: 22px; background: var(--sand); border-radius: 2px; }
 
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+      .grid-2 { grid-template-columns: repeat(2, 1fr); }
+      @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
       .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px;
         transition: transform .18s, border-color .18s, background .18s; }
       .card:hover { transform: translateY(-2px); border-color: var(--sand); background: var(--card-hover); }
@@ -208,7 +210,7 @@
 
       <section id="que-hace" class="fade">
         <div class="section-title">Qué hace</div>
-        <div class="grid">
+        <div class="grid grid-2">
           <div class="card">
             <h3>Local o cloud, tú eliges</h3>
             <p>El caso es que no siempre quieres depender de internet. Corre modelos Whisper
