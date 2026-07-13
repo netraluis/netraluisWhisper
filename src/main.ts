@@ -265,6 +265,10 @@ if (!app.requestSingleInstanceLock()) {
   // Clicking the Dock icon (macOS) reopens the config window. The Dock icon is
   // the reliable reopen path: unlike the menubar item, a notch can't hide it.
   app.on('activate', () => showConfig())
+  // Any real quit (Cmd+Q, Dock right-click > Quit, tray "Salir") flips this so
+  // the config window's close handler stops swallowing the close. Without it the
+  // ONLY quit path is the menubar item, which a notch can hide -> app unkillable.
+  app.on('before-quit', () => { quitting = true })
 
   app.whenReady().then(async () => {
     settings = loadSettings(DEFAULT_SETTINGS)

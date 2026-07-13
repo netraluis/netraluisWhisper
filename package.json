@@ -1,6 +1,6 @@
 {
   "name": "netraluiswhisper",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Local push-to-talk voice dictation for macOS (Wispr Flow style).",
   "main": "dist/main.js",
   "scripts": {
