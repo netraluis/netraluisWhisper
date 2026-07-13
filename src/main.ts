@@ -272,6 +272,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     settings = loadSettings(DEFAULT_SETTINGS)
+    let inputAuthedAtStart = true // non-mac: assume fine
     if (process.platform === 'darwin') {
       try {
         await systemPreferences.askForMediaAccess('microphone')
@@ -283,7 +284,8 @@ if (!app.requestSingleInstanceLock()) {
       // and browse to /Applications by hand.
       try {
         const perms = require('node-mac-permissions')
-        if (perms.getAuthStatus('input-monitoring') !== 'authorized') perms.askForInputMonitoringAccess()
+        inputAuthedAtStart = perms.getAuthStatus('input-monitoring') === 'authorized'
+        if (!inputAuthedAtStart) perms.askForInputMonitoringAccess()
         if (perms.getAuthStatus('accessibility') !== 'authorized') perms.askForAccessibilityAccess()
       } catch (e) {
         console.error('permission prompt failed:', (e as Error).message)
@@ -298,6 +300,7 @@ if (!app.requestSingleInstanceLock()) {
     createConfigWindow() // show the UI in our own window on launch
     banner()
     checkForUpdate() // non-blocking; result surfaced in the UI if newer
+    watchInputMonitoringGrant(inputAuthedAtStart)
   })
 }
 
@@ -435,20 +438,21 @@ async function startWebUi() {
       // node-mac-permissions gives the real TCC status; 'authorized' -> granted,
       // 'not determined' -> unknown, anything else -> denied.
       const norm = (s: string) => (s === 'authorized' ? 'granted' : s === 'not determined' ? 'unknown' : 'denied')
-      let inputMonitoring = hotkeyEverReceived ? 'granted' : 'unknown'
+      let inputMonitoring = 'unknown'
       let accessibility = systemPreferences.isTrustedAccessibilityClient(false) ? 'granted' : 'denied'
       try {
         const perms = require('node-mac-permissions')
         inputMonitoring = norm(perms.getAuthStatus('input-monitoring'))
         accessibility = norm(perms.getAuthStatus('accessibility'))
       } catch {}
-      // Live key delivery is proof-positive Input Monitoring works, even if TCC
-      // lags; keep it as an override.
-      if (hotkeyEverReceived) inputMonitoring = 'granted'
       return {
         microphone: systemPreferences.getMediaAccessStatus('microphone'),
         accessibility,
         inputMonitoring,
+        // Whether the global hotkey is actually delivering keys. The TCC toggle
+        // can read 'granted' while the event tap is dead (permission arrived
+        // after the tap was created), so the UI trusts this for "atajo activo".
+        hotkeyLive: hotkeyEverReceived,
       }
     },
     startHotkeyCapture: () => { captureHotkey = true },
@@ -535,6 +539,31 @@ function setupHotkey() {
     }
   })
   uIOhook.start()
+}
+
+// macOS creates the keyboard event tap when uIOhook.start() runs. If Input
+// Monitoring wasn't granted yet at that moment (e.g. the user grants it via the
+// first-launch prompt), the tap is born dead and never delivers keys until the
+// process restarts. So: if it wasn't authorized at start, watch for the grant
+// and relaunch once, so the fresh process rebuilds the tap WITH permission.
+// Without this, on first run neither recording nor "change key" works until the
+// user manually quits and reopens.
+function watchInputMonitoringGrant(authedAtStart: boolean) {
+  if (process.platform !== 'darwin' || authedAtStart) return
+  let relaunched = false
+  const iv = setInterval(() => {
+    if (hotkeyEverReceived) { clearInterval(iv); return } // tap already live
+    let authed = false
+    try { authed = require('node-mac-permissions').getAuthStatus('input-monitoring') === 'authorized' } catch {}
+    if (authed && !relaunched) {
+      relaunched = true
+      clearInterval(iv)
+      console.log('[hotkey] Input Monitoring granted -> relaunching to activate the tap')
+      quitting = true
+      app.relaunch()
+      app.exit(0)
+    }
+  }, 1500)
 }
 
 ipcMain.on('audio-pcm', async (_evt, buf: ArrayBuffer, len: number) => {

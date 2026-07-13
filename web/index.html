@@ -233,13 +233,18 @@
         const permTick = document.getElementById('ob-perms')
         permTick.textContent = allOk ? '●' : '○'
         permTick.className = 'tick' + (allOk ? ' ok' : '')
-        // Hotkey signal: is uiohook actually receiving keys? (Input Monitoring)
+        // Hotkey signal: trust real key delivery, not just the TCC toggle. The
+        // toggle can read granted while the event tap is dead (permission landed
+        // after the tap was built) — the app auto-restarts to fix that.
         const sig = document.getElementById('hotkeySignal')
-        if (p.inputMonitoring === 'granted') {
+        if (p.hotkeyLive) {
           sig.textContent = 'Atajo global: activo ✓'
           sig.className = 'note ok'
+        } else if (p.inputMonitoring === 'granted') {
+          sig.textContent = 'Atajo global: concedido, activando… (la app se reinicia sola)'
+          sig.className = 'note muted'
         } else {
-          sig.textContent = 'Atajo global: sin señal — pulsa cualquier tecla; si sigue así, concede Input Monitoring y reinicia la app.'
+          sig.textContent = 'Atajo global: sin señal — concede Input Monitoring (arriba) y reinicia la app.'
           sig.className = 'note bad'
         }
         // Permission hint: only nag while something is missing.
