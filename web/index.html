@@ -57,6 +57,15 @@
       .step-line { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
       .step-line .tick { flex: none; font-size: 15px; color: var(--muted); line-height: 1.5; }
       #onboarding .btn { margin: 0 4px 4px 0; }
+      .perm-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 6px 0; }
+      .perm { display: inline-flex; align-items: center; gap: 6px; }
+      .perm-badge { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid;
+        place-items: center; font-size: 11px; font-weight: 700; color: #0b0c0f;
+        background: #3a3d45; }
+      .perm-badge.ok { background: #37d67a; } .perm-badge.bad { background: #ff5c5c; color: #fff; }
+      .perm-badge.unknown { background: #3a3d45; color: var(--muted); }
+      .tick.ok { color: #37d67a; } .tick.bad { color: #ff5c5c; }
+      #hotkeySignal.ok { color: #37d67a; } #hotkeySignal.bad { color: #ff5c5c; }
     </style>
   </head>
   <body>
@@ -78,15 +87,21 @@
         <div id="ob-steps" style="display:flex; flex-direction:column; gap:10px">
           <div class="step-line"><span class="tick" id="ob-engine">○</span>
             <span><strong>Elige motor y credencial</strong> — abajo: motor <b>local</b> (descarga un modelo) o <b>cloud</b> (pega tu API key).</span></div>
-          <div class="step-line"><span class="tick">○</span>
+          <div class="step-line"><span class="tick" id="ob-perms">○</span>
             <span><strong>Concede permisos a la app</strong> en macOS:
-              <button class="btn" onclick="openPrivacy('microphone')">Micrófono</button>
-              <button class="btn" onclick="openPrivacy('input')">Input Monitoring</button>
-              <button class="btn" onclick="openPrivacy('accessibility')">Accesibilidad</button>
-              <span class="note muted" style="margin-top:6px">Actívalos y reinicia la app.</span>
+              <div class="perm-grid">
+                <span class="perm"><span class="perm-badge" id="perm-mic">?</span>
+                  <button class="btn" onclick="openPrivacy('microphone')">Micrófono</button></span>
+                <span class="perm"><span class="perm-badge" id="perm-input">?</span>
+                  <button class="btn" onclick="openPrivacy('input')">Input Monitoring</button></span>
+                <span class="perm"><span class="perm-badge" id="perm-acc">?</span>
+                  <button class="btn" onclick="openPrivacy('accessibility')">Accesibilidad</button></span>
+              </div>
+              <span class="note muted" id="permHint" style="margin-top:6px">Actívalos y reinicia la app.</span>
             </span></div>
-          <div class="step-line"><span class="tick">○</span>
-            <span><strong>Dicta</strong> — mantén <b id="ob-key">Cmd derecho</b>, habla, suelta.</span></div>
+          <div class="step-line"><span class="tick" id="ob-dicta">○</span>
+            <span><strong>Dicta</strong> — mantén <b id="ob-key">Cmd derecho</b>, habla, suelta.
+              <br /><span class="note" id="hotkeySignal" style="margin-top:4px">Atajo global: comprobando…</span></span></div>
         </div>
       </div>
 
@@ -197,6 +212,40 @@
         tick.style.color = ready ? '#37c871' : ''
         document.getElementById('ob-key').textContent = keyLabel(currentKeycode || 3676)
         document.getElementById('onboarding').style.opacity = ready ? '0.55' : '1'
+      }
+
+      function setBadge(id, status) {
+        const el = document.getElementById(id)
+        if (!el) return
+        if (status === 'granted') { el.className = 'perm-badge ok'; el.textContent = '✓' }
+        else if (status === 'denied') { el.className = 'perm-badge bad'; el.textContent = '✕' }
+        else { el.className = 'perm-badge unknown'; el.textContent = '?' }
+      }
+
+      async function refreshPermissions() {
+        const p = await fetch('/api/permissions').then((r) => r.json()).catch(() => null)
+        if (!p) return
+        setBadge('perm-mic', p.microphone)
+        setBadge('perm-acc', p.accessibility)
+        setBadge('perm-input', p.inputMonitoring)
+        // Permissions step tick: green only when all three are granted.
+        const allOk = p.microphone === 'granted' && p.accessibility === 'granted' && p.inputMonitoring === 'granted'
+        const permTick = document.getElementById('ob-perms')
+        permTick.textContent = allOk ? '●' : '○'
+        permTick.className = 'tick' + (allOk ? ' ok' : '')
+        // Hotkey signal: is uiohook actually receiving keys? (Input Monitoring)
+        const sig = document.getElementById('hotkeySignal')
+        if (p.inputMonitoring === 'granted') {
+          sig.textContent = 'Atajo global: activo ✓'
+          sig.className = 'note ok'
+        } else {
+          sig.textContent = 'Atajo global: sin señal — pulsa cualquier tecla; si sigue así, concede Input Monitoring y reinicia la app.'
+          sig.className = 'note bad'
+        }
+        // Permission hint: only nag while something is missing.
+        const hint = document.getElementById('permHint')
+        if (allOk) { hint.textContent = 'Todo concedido ✓'; hint.className = 'note ok' }
+        else { hint.textContent = 'Concede los que falten (✕) y reinicia la app.'; hint.className = 'note muted' }
       }
 
       function keyLabel(code) {
@@ -450,10 +499,13 @@
         await fetch('/api/update/open', { method: 'POST' })
       }
 
-      function loadAll() { loadSettings(); loadHistory() }
+      function loadAll() { loadSettings(); loadHistory(); refreshPermissions() }
       loadAll()
       checkUpdate()
       setInterval(loadHistory, 4000)
+      // Poll permissions live so badges flip to ✓ the moment the user grants
+      // them in System Settings (no manual refresh needed).
+      setInterval(refreshPermissions, 1500)
     </script>
   </body>
 </html>

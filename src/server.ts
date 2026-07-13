@@ -23,6 +23,7 @@ export interface ServerApi {
   loadLocalModel: (model: string) => void
   resetLocalModel: (model: string) => void
   getModelStatus: () => ModelStatus
+  getPermissions: () => { microphone: string; accessibility: string; inputMonitoring: string }
   startHotkeyCapture: () => void
   openPrivacyPane: (pane: string) => void
   getUpdate: () => { current: string; updateAvailable: boolean; latest: string; url: string }
@@ -94,6 +95,7 @@ export function startServer(port: number, api: ServerApi): Promise<number> {
     res.json({ ok: true })
   })
   server.get('/api/model/status', (_req, res) => res.json(api.getModelStatus()))
+  server.get('/api/permissions', (_req, res) => res.json(api.getPermissions()))
 
   // Repair: wipe cache + re-download the model (for a corrupt/interrupted download).
   server.post('/api/model/reset', (req, res) => {

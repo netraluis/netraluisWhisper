@@ -69,6 +69,7 @@ let settings: Settings = { ...DEFAULT_SETTINGS }
 const DEBUG_KEYS = process.env.DEBUG_KEYS === '1'
 const PORT = Number(process.env.PORT || 8765)
 let captureHotkey = false // when true, next keypress sets the trigger key
+let hotkeyEverReceived = false // true once uiohook delivers ANY key -> Input Monitoring is granted
 let updateInfo: { latest: string; url: string } | null = null
 
 const REPO = 'netraluis/netraluisWhisper'
@@ -412,6 +413,15 @@ async function startWebUi() {
     loadLocalModel: (model) => loadLocalModel(model),
     resetLocalModel: (model) => resetLocalModel(model),
     getModelStatus: () => ({ ready: inferReadyModel, loading: inferLoading, error: inferError }),
+    getPermissions: () => {
+      const mac = process.platform === 'darwin'
+      return {
+        microphone: mac ? systemPreferences.getMediaAccessStatus('microphone') : 'granted',
+        accessibility: mac ? (systemPreferences.isTrustedAccessibilityClient(false) ? 'granted' : 'denied') : 'granted',
+        // Input Monitoring has no query API; infer it from live key delivery.
+        inputMonitoring: hotkeyEverReceived ? 'granted' : 'unknown',
+      }
+    },
     startHotkeyCapture: () => { captureHotkey = true },
     openPrivacyPane: (pane) => openPrivacyPane(pane),
     getUpdate: () => ({
@@ -460,6 +470,8 @@ function getFrontApp(): Promise<string> {
 
 function setupHotkey() {
   uIOhook.on('keydown', (e) => {
+    // Any delivered key proves Input Monitoring is granted (uiohook is live).
+    hotkeyEverReceived = true
     if (DEBUG_KEYS) console.log('[keydown] keycode =', e.keycode)
     // Hotkey-capture mode: the next key the user presses becomes the trigger.
     if (captureHotkey) {
@@ -470,6 +482,13 @@ function setupHotkey() {
       return
     }
     if (e.keycode === settings.triggerKeycode && !recording) {
+      // Fail loud, not silent: if the mic isn't granted, capture would just
+      // produce empty audio. Tell the user on the press instead.
+      if (process.platform === 'darwin' &&
+          systemPreferences.getMediaAccessStatus('microphone') !== 'granted') {
+        errorOverlay('Falta permiso de micrófono — conécedelo en Ajustes')
+        return
+      }
       recording = true
       pendingApp = ''
       getFrontApp().then((a) => (pendingApp = a))
