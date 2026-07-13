@@ -69,13 +69,18 @@
         border-radius: 12px; padding: 14px 22px; font-size: 15px; font-weight: 600; transition: transform .15s, border-color .15s; }
       .btn.primary { background: var(--sand); color: var(--teal-dark); }
       .btn.primary:hover { transform: translateY(-2px); }
-      .cmd { display: inline-flex; align-items: center; gap: 12px; background: var(--card);
-        border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 12px 16px;
-        font-family: var(--mono); font-size: 13px; color: var(--fg); }
-      .cmd button { background: rgba(255,255,255,0.06); color: var(--fg); border: 1px solid var(--border);
-        border-radius: 7px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-family: var(--font); }
-      .cmd button:hover { border-color: var(--sand); }
+      .cmd { display: inline-flex; align-items: center; gap: 10px; background: var(--card);
+        border: 1px solid var(--border); border-radius: 12px; padding: 10px 10px 10px 16px;
+        font-family: var(--mono); font-size: 14px; color: var(--fg); max-width: 100%; }
+      .cmd .prompt { color: var(--sand); user-select: none; }
+      .cmd #brewcmd { overflow-x: auto; white-space: nowrap; }
+      .cmd button.copy { background: var(--sand); color: var(--teal-dark); border: 0; font-weight: 600;
+        border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: var(--font);
+        flex-shrink: 0; transition: transform .12s; }
+      .cmd button.copy:hover { transform: translateY(-1px); }
       .hint { font-size: 13px; color: var(--muted); margin-top: 18px; }
+      .hint a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+      .hint a:hover { color: var(--sand); }
 
       .pill-demo { margin: 46px auto 0; width: fit-content; display: flex; align-items: center; gap: 10px;
         background: rgba(6, 47, 56, 0.6); border: 1px solid var(--border); color: var(--fg);
@@ -102,6 +107,9 @@
         color: var(--sand); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
       .step code, code.inline { font-family: var(--mono); background: rgba(0,0,0,0.25);
         border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; font-size: 13px; }
+      .muted-note { color: var(--muted); font-size: 13px; }
+      .muted-note a { color: var(--sand); text-decoration: none; }
+      .muted-note a:hover { text-decoration: underline; }
 
       .note-block { background: var(--card); border: 1px solid var(--border); border-radius: 16px;
         padding: 22px 24px; color: var(--muted); font-size: 15px; }
@@ -171,15 +179,13 @@
           tu propia API si la prefieres.
         </p>
         <div class="cta">
-          <a class="btn primary" href="https://github.com/netraluis/netraluisWhisper/releases/latest/download/netraluisWhisper.dmg">
-            Descargar para Mac
-          </a>
           <span class="cmd">
+            <span class="prompt">$</span>
             <span id="brewcmd">brew install --cask netraluis/tap/netraluiswhisper</span>
-            <button onclick="copyBrew()">Copiar</button>
+            <button class="copy" onclick="copyBrew()">Copiar</button>
           </span>
         </div>
-        <div class="hint">Gratis y open source. macOS · Apple Silicon.</div>
+        <div class="hint">Gratis y open source · macOS · Apple Silicon · <a href="#instalar">cómo instalar</a></div>
 
         <div class="pill-demo"><span class="rec"></span> Escuchando…</div>
       </div>
@@ -249,15 +255,12 @@
         <div class="section-title">Instalar</div>
         <div class="steps">
           <div class="step"><div class="n">1</div>
-            <div><strong>Descarga</strong> el <code>.dmg</code>, ábrelo y arrastra la app a Aplicaciones.
-              <br />O por terminal: <code>brew install --cask netraluis/tap/netraluiswhisper</code></div></div>
+            <div><strong>Instala con Homebrew.</strong> Un comando, en la terminal:
+              <br /><code>brew install --cask netraluis/tap/netraluiswhisper</code>
+              <br /><span class="muted-note">¿No tienes Homebrew? <a href="https://brew.sh" target="_blank" rel="noopener">brew.sh</a>. La app se abre sola: Homebrew le quita el candado de macOS por ti.</span></div></div>
           <div class="step"><div class="n">2</div>
-            <div><strong>Primera vez</strong> (la app no está firmada, así que macOS la bloquea):
-              <br /><code>xattr -dr com.apple.quarantine /Applications/netraluisWhisper.app</code>
-              <br />y ábrela. Con Homebrew este paso no hace falta.</div></div>
-          <div class="step"><div class="n">3</div>
             <div><strong>Da permisos</strong> cuando macOS los pida: Micrófono, Input Monitoring y Accesibilidad.</div></div>
-          <div class="step"><div class="n">4</div>
+          <div class="step"><div class="n">3</div>
             <div><strong>Dicta.</strong> Mantén Cmd derecho, habla, suelta. Configura motor, modelo, idioma y
               tecla desde el icono del menubar.</div></div>
         </div>
