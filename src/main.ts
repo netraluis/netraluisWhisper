@@ -169,10 +169,20 @@ function createInferWindow() {
 // The config/history UI, in the app's own window (no external browser).
 function createConfigWindow() {
   configWin = new BrowserWindow({
-    width: 900, height: 720, show: true, title: 'netraluisWhisper',
+    width: 900, height: 720, show: false, title: 'netraluisWhisper',
     backgroundColor: '#0f1012',
   })
   configWin.loadURL(`http://127.0.0.1:${boundPort}/`)
+  // Show only once the UI is painted, then pull it to the front. Without the
+  // explicit focus the window opens behind other apps and users think nothing
+  // happened (the app is menubar-based, so there's no other visible cue).
+  configWin.once('ready-to-show', () => {
+    if (!configWin || configWin.isDestroyed()) return
+    configWin.center()
+    configWin.show()
+    configWin.focus()
+    if (process.platform === 'darwin') app.focus({ steal: true })
+  })
   configWin.on('close', (e) => {
     // Closing the window keeps the app running (menubar); only quit via tray.
     if (!quitting) {
@@ -185,11 +195,26 @@ function createConfigWindow() {
 function showConfig() {
   if (!configWin || configWin.isDestroyed()) createConfigWindow()
   else { configWin.show(); configWin.focus() }
+  if (process.platform === 'darwin') app.focus({ steal: true })
+}
+
+// Menubar icon (monochrome waveform, template image so macOS tints it to match
+// light/dark). 16px base + 32px @2x for retina. A real icon renders more
+// reliably than an emoji title, which some menubars drop behind the notch.
+const TRAY_ICON_16 =
+  'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVR4nGNgoDH4D8X0NQBZE1UNwGsYMZqoagCGYaMGoAKyNFHVAFyGkQUoNoAgAABVTFepQ3tMgAAAAABJRU5ErkJggg=='
+const TRAY_ICON_32 =
+  'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAQklEQVR4nO3OOQ4AMAgDQf7/aWhTpEGQiGNXcu0RoVh6DMB8wO2sJOAZahcgclYS4EYBAAAAwDhASgDaAL4GAED/DInuBwjSPaGpAAAAAElFTkSuQmCC'
+
+function trayIcon() {
+  const img = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_16, 'base64'))
+  img.addRepresentation({ scaleFactor: 2, buffer: Buffer.from(TRAY_ICON_32, 'base64') })
+  img.setTemplateImage(true)
+  return img
 }
 
 function setupTray() {
-  tray = new Tray(nativeImage.createEmpty())
-  tray.setTitle('🎙') // text in the menubar (no icon asset needed)
+  tray = new Tray(trayIcon())
   tray.setToolTip('netraluisWhisper')
   tray.setContextMenu(
     Menu.buildFromTemplate([
@@ -236,6 +261,9 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => showConfig())
+  // Clicking the Dock icon (macOS) reopens the config window. The Dock icon is
+  // the reliable reopen path: unlike the menubar item, a notch can't hide it.
+  app.on('activate', () => showConfig())
 
   app.whenReady().then(async () => {
     settings = loadSettings(DEFAULT_SETTINGS)
