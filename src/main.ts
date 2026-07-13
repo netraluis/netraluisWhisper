@@ -276,6 +276,18 @@ if (!app.requestSingleInstanceLock()) {
       try {
         await systemPreferences.askForMediaAccess('microphone')
       } catch {}
+      // Proactively request the two permissions the global hotkey needs. These
+      // call the macOS APIs (IOHIDRequestAccess / AXIsProcessTrusted) which add
+      // netraluisWhisper to the Input Monitoring + Accessibility lists AND show
+      // a native "allow" prompt — so the user never has to hit the '+' button
+      // and browse to /Applications by hand.
+      try {
+        const perms = require('node-mac-permissions')
+        if (perms.getAuthStatus('input-monitoring') !== 'authorized') perms.askForInputMonitoringAccess()
+        if (perms.getAuthStatus('accessibility') !== 'authorized') perms.askForAccessibilityAccess()
+      } catch (e) {
+        console.error('permission prompt failed:', (e as Error).message)
+      }
     }
     await startWebUi() // server must be up before windows load their URLs
     createOverlay()
@@ -419,11 +431,24 @@ async function startWebUi() {
     getModelStatus: () => ({ ready: inferReadyModel, loading: inferLoading, error: inferError }),
     getPermissions: () => {
       const mac = process.platform === 'darwin'
+      if (!mac) return { microphone: 'granted', accessibility: 'granted', inputMonitoring: 'granted' }
+      // node-mac-permissions gives the real TCC status; 'authorized' -> granted,
+      // 'not determined' -> unknown, anything else -> denied.
+      const norm = (s: string) => (s === 'authorized' ? 'granted' : s === 'not determined' ? 'unknown' : 'denied')
+      let inputMonitoring = hotkeyEverReceived ? 'granted' : 'unknown'
+      let accessibility = systemPreferences.isTrustedAccessibilityClient(false) ? 'granted' : 'denied'
+      try {
+        const perms = require('node-mac-permissions')
+        inputMonitoring = norm(perms.getAuthStatus('input-monitoring'))
+        accessibility = norm(perms.getAuthStatus('accessibility'))
+      } catch {}
+      // Live key delivery is proof-positive Input Monitoring works, even if TCC
+      // lags; keep it as an override.
+      if (hotkeyEverReceived) inputMonitoring = 'granted'
       return {
-        microphone: mac ? systemPreferences.getMediaAccessStatus('microphone') : 'granted',
-        accessibility: mac ? (systemPreferences.isTrustedAccessibilityClient(false) ? 'granted' : 'denied') : 'granted',
-        // Input Monitoring has no query API; infer it from live key delivery.
-        inputMonitoring: hotkeyEverReceived ? 'granted' : 'unknown',
+        microphone: systemPreferences.getMediaAccessStatus('microphone'),
+        accessibility,
+        inputMonitoring,
       }
     },
     startHotkeyCapture: () => { captureHotkey = true },
