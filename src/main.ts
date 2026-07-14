@@ -242,15 +242,22 @@ function cleanupAndQuit() {
 // startup: show() would steal focus (cursor jumps off the app being dictated
 // into) and showInactive() doesn't reliably composite a transparent window on
 // macOS. Opacity toggling paints reliably and never touches focus.
+const OVERLAY_W = 260
+const OVERLAY_H = 52
 function paintOverlay(state: string, msg?: string) {
   if (!win || win.isDestroyed()) return
   win.webContents.send('state', state, msg)
-  // Center it near the bottom of the display under the cursor (above the Dock),
-  // so multi-monitor users see it where they're working.
-  const disp = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
-  const wa = disp.workArea
-  const [w, h] = win.getSize()
-  win.setBounds({ x: Math.round(wa.x + wa.width / 2 - w / 2), y: Math.round(wa.y + wa.height - 120), width: w, height: h })
+  // Bottom-center of the display under the cursor (above the Dock), so
+  // multi-monitor users see it where they're working. Hardcode the size (a
+  // stale getSize() once threw it off-screen) and CLAMP fully on-screen so a
+  // bad cursor/display reading can never park it in a corner or off the edge.
+  let disp = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  const wa = disp && disp.workArea && disp.workArea.width > 0 ? disp.workArea : screen.getPrimaryDisplay().workArea
+  let x = Math.round(wa.x + wa.width / 2 - OVERLAY_W / 2)
+  let y = Math.round(wa.y + wa.height - 120)
+  x = Math.max(wa.x, Math.min(x, wa.x + wa.width - OVERLAY_W))
+  y = Math.max(wa.y, Math.min(y, wa.y + wa.height - OVERLAY_H))
+  win.setBounds({ x, y, width: OVERLAY_W, height: OVERLAY_H })
   win.setAlwaysOnTop(true, 'screen-saver')
   win.showInactive() // opaque window composites reliably; never steals focus
 }
@@ -615,6 +622,7 @@ function installTestHooks() {
     overlayState: () => ({
       opacity: win && !win.isDestroyed() ? win.getOpacity() : -1,
       visible: win && !win.isDestroyed() ? win.isVisible() : false,
+      bounds: win && !win.isDestroyed() ? win.getBounds() : null,
       recording,
     }),
     settings: () => settings,

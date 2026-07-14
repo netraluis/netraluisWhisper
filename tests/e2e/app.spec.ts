@@ -102,6 +102,13 @@ test('pressing the key WITH a key records, then transcribes', async () => {
   let s = await overlayState()
   expect(s.recording).toBe(true)
   expect(s.visible).toBe(true)
+  // Overlay must land fully inside a real display (regression: it once parked
+  // itself off-screen at negative coords).
+  const displays = await app.evaluate(({ screen }) => screen.getAllDisplays().map((d) => d.bounds))
+  const b = s.bounds
+  const onScreen = displays.some((d: any) =>
+    b.x >= d.x && b.y >= d.y && b.x + b.width <= d.x + d.width && b.y + b.height <= d.y + d.height)
+  expect(onScreen, `overlay bounds ${JSON.stringify(b)} not inside any display ${JSON.stringify(displays)}`).toBe(true)
   await expect.poll(overlayClass).toBe('recording')
   await triggerUp()
   s = await overlayState()
