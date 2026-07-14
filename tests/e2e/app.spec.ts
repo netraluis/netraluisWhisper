@@ -120,6 +120,25 @@ test('pressing the key WITH a key records, then transcribes', async () => {
   await expect.poll(overlayClass).not.toBe('recording')
 })
 
+test('transcription with speech pastes the text and flashes Pegado', async () => {
+  await post('/api/keys', { provider: 'openai', key: 'sk-test-fake' })
+  await app.evaluate(() => (global as any).__nwTest.setMockTranscribe('hola mundo'))
+  await app.evaluate(() => (global as any).__nwTest.feedAudio(24000))
+  await expect.poll(() => app.evaluate(() => (global as any).__nwTest.lastPasted())).toBe('hola mundo')
+  await expect.poll(overlayClass).toBe('done')
+  await app.evaluate(() => (global as any).__nwTest.setMockTranscribe(undefined))
+})
+
+test('silent/empty audio shows "no te he oído", does not paste', async () => {
+  await app.evaluate(() => (global as any).__nwTest.setMockTranscribe('')) // empty = no speech
+  await app.evaluate(() => (global as any).__nwTest.feedAudio(24000))
+  await expect.poll(overlayClass).toBe('error') // visible feedback, not a silent vanish
+  const s = await overlayState()
+  expect(s.recording).toBe(false)
+  await app.evaluate(() => (global as any).__nwTest.setMockTranscribe(undefined))
+  await app.evaluate(() => (global as any).__nwTest.hideOverlay())
+})
+
 test('overlay hides again after the flow ends', async () => {
   await app.evaluate(() => (global as any).__nwTest.hideOverlay())
   const s = await overlayState()

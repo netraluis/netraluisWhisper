@@ -643,6 +643,10 @@ function installTestHooks() {
     settings: () => settings,
     setRecordingDone: () => { doneOverlay() },
     hideOverlay: () => hideOverlay(),
+    // Drive the transcribe/paste path with a mocked result (no real API/mic).
+    setMockTranscribe: (v: string | null | undefined) => { mockTranscribe = v },
+    feedAudio: async (len: number) => { const pcm = new Float32Array(Math.max(len, 1)).fill(0.1); await handleAudio(pcm) },
+    lastPasted: () => lastPasted,
   }
   console.log('[test] hooks installed (NW_TEST=1)')
 }
@@ -672,14 +676,16 @@ function watchInputMonitoringGrant(authedAtStart: boolean) {
   }, 1500)
 }
 
-ipcMain.on('audio-pcm', async (_evt, buf: ArrayBuffer, len: number) => {
-  const ab: ArrayBuffer = buf instanceof ArrayBuffer ? buf : (buf as any).buffer
-  const pcm = new Float32Array(ab, 0, len || undefined)
+let mockTranscribe: string | null | undefined = undefined // test-only override
+async function handleAudio(pcm: Float32Array) {
   if (pcm.length < 1600) {
     console.log('(recording too short, skipped)')
     hideOverlay()
     return
   }
+  let peak = 0
+  for (let i = 0; i < pcm.length; i += 64) { const a = Math.abs(pcm[i]); if (a > peak) peak = a }
+  console.log(`[audio] ${pcm.length} samples, peak amplitude ${peak.toFixed(4)}${peak < 0.002 ? ' (SILENT!)' : ''}`)
   const provider = PROVIDERS[settings.provider]
   let usedProvider = settings.provider
   let usedModel = settings.model
@@ -687,7 +693,9 @@ ipcMain.on('audio-pcm', async (_evt, buf: ArrayBuffer, len: number) => {
   const t0 = Date.now()
   try {
     let text = ''
-    if (provider?.kind === 'local') {
+    if (process.env.NW_TEST === '1' && mockTranscribe !== undefined) {
+      text = mockTranscribe ?? ''
+    } else if (provider?.kind === 'local') {
       if (inferReadyModel === settings.model) {
         text = await localInfer(pcm, settings.language)
       } else {
@@ -721,14 +729,20 @@ ipcMain.on('audio-pcm', async (_evt, buf: ArrayBuffer, len: number) => {
       )
       doneOverlay() // "Pegado ✓"
     } else {
+      // Empty result = silence / too quiet. Don't vanish silently (that reads as
+      // "broken, nothing pasted") — tell the user we didn't hear them.
       console.log('(no speech detected)')
-      hideOverlay()
+      errorOverlay('No te he oído, prueba de nuevo')
     }
   } catch (err) {
     const msg = (err as Error).message
     console.error('transcribe error:', msg)
     errorOverlay(msg) // hard-stop, visible to the user (not a silent failure)
   }
+}
+ipcMain.on('audio-pcm', async (_evt, buf: ArrayBuffer, len: number) => {
+  const ab: ArrayBuffer = buf instanceof ArrayBuffer ? buf : (buf as any).buffer
+  await handleAudio(new Float32Array(ab, 0, len || undefined))
 })
 
 function sendCmdV(cb?: () => void) {
@@ -739,7 +753,10 @@ function sendCmdV(cb?: () => void) {
   })
 }
 
+let lastPasted = '' // test-only: what pasteText last wrote
 function pasteText(text: string) {
+  lastPasted = text
+  if (process.env.NW_TEST === '1') { clipboard.writeText(text); return } // no keystroke under test
   const prev = clipboard.readText()
   clipboard.writeText(text)
   sendCmdV(() => setTimeout(() => clipboard.writeText(prev), 600))
