@@ -232,10 +232,27 @@ function cleanupAndQuit() {
   app.quit()
 }
 
+// Paint a state and force the pill onto the screen. macOS will not render a
+// transparent, focusable:false window via showInactive() reliably (it stays
+// invisible even though the render process is alive), so we call show() — the
+// window is focusable:false, so it appears WITHOUT stealing focus from whatever
+// app the user is dictating into. Reassert the top level each time in case
+// another full-screen app pushed us down.
+function paintOverlay(state: string, msg?: string) {
+  if (!win || win.isDestroyed()) return
+  win.webContents.send('state', state, msg)
+  // Put the pill on the display the user is actually on (cursor's screen), not
+  // always the primary one — otherwise multi-monitor users never see the state.
+  const disp = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  const wa = disp.workArea
+  // 160px up from the bottom of the work area so the pill clears the Dock (a
+  // pill hugging the very bottom hides behind it and reads as "no feedback").
+  win.setBounds({ x: Math.round(wa.x + wa.width / 2 - 120), y: Math.round(wa.y + wa.height - 160), width: 240, height: 72 })
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.show()
+}
 function showOverlay(state: 'recording' | 'transcribing') {
-  if (!win) return
-  win.webContents.send('state', state)
-  win.showInactive()
+  paintOverlay(state)
 }
 function hideOverlay() {
   win?.webContents.send('state', 'idle')
@@ -243,16 +260,12 @@ function hideOverlay() {
 }
 // Success confirmation: flash "Pegado ✓" briefly, then hide.
 function doneOverlay() {
-  if (!win) return
-  win.webContents.send('state', 'done')
-  win.showInactive()
+  paintOverlay('done')
   setTimeout(() => hideOverlay(), 950)
 }
 // Hard-stop, visible: flash the reason in the pill, then hide.
 function errorOverlay(msg: string) {
-  if (!win) return
-  win.webContents.send('state', 'error', msg)
-  win.showInactive()
+  paintOverlay('error', msg)
   setTimeout(() => hideOverlay(), 2800)
 }
 
