@@ -13,7 +13,11 @@
         -webkit-user-select: none;
         cursor: default;
       }
-      #pill {
+      /* Hidden until a real state class lands, so a freshly-shown window never
+         flashes the default "Escuchando…" text (e.g. on an instant rejection). */
+      #pill { display: none; }
+      body.recording #pill, body.transcribing #pill,
+      body.done #pill, body.error #pill {
         display: flex;
         align-items: center;
         gap: 10px;
