@@ -232,24 +232,18 @@ function cleanupAndQuit() {
   app.quit()
 }
 
-// Paint a state and force the pill onto the screen. macOS will not render a
-// transparent, focusable:false window via showInactive() reliably (it stays
-// invisible even though the render process is alive), so we call show() — the
-// window is focusable:false, so it appears WITHOUT stealing focus from whatever
-// app the user is dictating into. Reassert the top level each time in case
-// another full-screen app pushed us down.
+// Paint a state and put the pill on screen WITHOUT stealing focus. Use
+// showInactive() (never show()/focus()) so the app the user is dictating into
+// stays frontmost — otherwise the cursor jumps to our window and the paste
+// lands nowhere. Position it on the display under the cursor, above the Dock.
 function paintOverlay(state: string, msg?: string) {
   if (!win || win.isDestroyed()) return
   win.webContents.send('state', state, msg)
-  // Put the pill on the display the user is actually on (cursor's screen), not
-  // always the primary one — otherwise multi-monitor users never see the state.
   const disp = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
   const wa = disp.workArea
-  // 160px up from the bottom of the work area so the pill clears the Dock (a
-  // pill hugging the very bottom hides behind it and reads as "no feedback").
   win.setBounds({ x: Math.round(wa.x + wa.width / 2 - 120), y: Math.round(wa.y + wa.height - 160), width: 240, height: 72 })
   win.setAlwaysOnTop(true, 'screen-saver')
-  win.show()
+  win.showInactive()
 }
 function showOverlay(state: 'recording' | 'transcribing') {
   paintOverlay(state)
@@ -377,6 +371,21 @@ function firstCloudWithKey(): string {
     if (p.kind === 'cloud' && hasKey(name)) return name
   }
   return ''
+}
+
+// Can we actually transcribe right now? Checked on key-press so we can reject
+// immediately (before recording) instead of letting the user speak and then
+// silently doing nothing. Mirrors the branch logic in the audio-pcm handler.
+function transcribeReady(): { ok: boolean; msg?: string } {
+  const provider = PROVIDERS[settings.provider]
+  if (provider?.kind === 'local') {
+    if (inferReadyModel === settings.model) return { ok: true }
+    if (firstCloudWithKey()) return { ok: true } // will fall back to cloud
+    return { ok: false, msg: 'Descarga el modelo en Ajustes (o añade una API key)' }
+  }
+  // cloud provider selected
+  if (hasKey(settings.provider)) return { ok: true }
+  return { ok: false, msg: 'Falta la API key — añádela en Ajustes' }
 }
 
 async function cloudTranscribe(
@@ -533,6 +542,13 @@ function setupHotkey() {
       if (process.platform === 'darwin' &&
           systemPreferences.getMediaAccessStatus('microphone') !== 'granted') {
         errorOverlay('Falta permiso de micrófono — conécedelo en Ajustes')
+        return
+      }
+      // No key / no model => reject on the press. Don't start "listening" for a
+      // recording we can't transcribe.
+      const ready = transcribeReady()
+      if (!ready.ok) {
+        errorOverlay(ready.msg || 'No hay motor listo')
         return
       }
       recording = true
