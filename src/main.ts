@@ -132,6 +132,15 @@ function createOverlay() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
   win.setBounds({ x: Math.round(width / 2 - 120), y: height - 100, width: 240, height: 72 })
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
+  // Order the window on screen ONCE, then keep it there at opacity 0. macOS won't
+  // reliably composite a transparent focusable:false window via showInactive()
+  // on each use, and show() would steal focus from the app being dictated into.
+  // So we never hide/show after this — we just toggle opacity, which paints
+  // reliably and never touches focus.
+  win.once('ready-to-show', () => {
+    win?.showInactive()
+    win?.setOpacity(0)
+  })
 }
 
 let inferRelaunches = 0
@@ -232,10 +241,12 @@ function cleanupAndQuit() {
   app.quit()
 }
 
-// Paint a state and put the pill on screen WITHOUT stealing focus. Use
-// showInactive() (never show()/focus()) so the app the user is dictating into
-// stays frontmost — otherwise the cursor jumps to our window and the paste
-// lands nowhere. Position it on the display under the cursor, above the Dock.
+// Reveal a state on screen WITHOUT stealing focus. The window is ordered-front
+// once at startup and then kept there at opacity 0; here we just reposition it
+// to the cursor's display and set opacity to 1. We never show()/hide() after
+// startup: show() would steal focus (cursor jumps off the app being dictated
+// into) and showInactive() doesn't reliably composite a transparent window on
+// macOS. Opacity toggling paints reliably and never touches focus.
 function paintOverlay(state: string, msg?: string) {
   if (!win || win.isDestroyed()) return
   win.webContents.send('state', state, msg)
@@ -243,14 +254,14 @@ function paintOverlay(state: string, msg?: string) {
   const wa = disp.workArea
   win.setBounds({ x: Math.round(wa.x + wa.width / 2 - 120), y: Math.round(wa.y + wa.height - 160), width: 240, height: 72 })
   win.setAlwaysOnTop(true, 'screen-saver')
-  win.showInactive()
+  win.setOpacity(1)
 }
 function showOverlay(state: 'recording' | 'transcribing') {
   paintOverlay(state)
 }
 function hideOverlay() {
   win?.webContents.send('state', 'idle')
-  win?.hide()
+  win?.setOpacity(0)
 }
 // Success confirmation: flash "Pegado ✓" briefly, then hide.
 function doneOverlay() {
