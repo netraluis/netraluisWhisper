@@ -120,27 +120,22 @@ let inferError = ''
 let pendingInfer: ((r: { text?: string; error?: string }) => void) | null = null
 
 function createOverlay() {
+  // OPAQUE window (not transparent): a transparent + focusable:false window does
+  // not reliably composite via showInactive() on macOS (the pill stays invisible)
+  // and setOpacity() is a no-op on it. An opaque rounded window composites fine.
+  // backgroundThrottling:false keeps the hidden renderer live so it applies the
+  // 'state' IPC immediately instead of showing a stale frame.
   win = new BrowserWindow({
-    width: 240, height: 72, show: false, frame: false, transparent: true,
-    hasShadow: false, resizable: false, focusable: false, skipTaskbar: true,
+    width: 260, height: 52, show: false, frame: false, transparent: false,
+    backgroundColor: '#141416', roundedCorners: true,
+    hasShadow: true, resizable: false, focusable: false, skipTaskbar: true,
     alwaysOnTop: true,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: { nodeIntegration: true, contextIsolation: false, backgroundThrottling: false },
   })
   win.setAlwaysOnTop(true, 'screen-saver')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   win.setIgnoreMouseEvents(true)
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
-  win.setBounds({ x: Math.round(width / 2 - 120), y: height - 100, width: 240, height: 72 })
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
-  // Order the window on screen ONCE, then keep it there at opacity 0. macOS won't
-  // reliably composite a transparent focusable:false window via showInactive()
-  // on each use, and show() would steal focus from the app being dictated into.
-  // So we never hide/show after this — we just toggle opacity, which paints
-  // reliably and never touches focus.
-  win.once('ready-to-show', () => {
-    win?.showInactive()
-    win?.setOpacity(0)
-  })
 }
 
 let inferRelaunches = 0
@@ -250,18 +245,21 @@ function cleanupAndQuit() {
 function paintOverlay(state: string, msg?: string) {
   if (!win || win.isDestroyed()) return
   win.webContents.send('state', state, msg)
+  // Center it near the bottom of the display under the cursor (above the Dock),
+  // so multi-monitor users see it where they're working.
   const disp = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
   const wa = disp.workArea
-  win.setBounds({ x: Math.round(wa.x + wa.width / 2 - 120), y: Math.round(wa.y + wa.height - 160), width: 240, height: 72 })
+  const [w, h] = win.getSize()
+  win.setBounds({ x: Math.round(wa.x + wa.width / 2 - w / 2), y: Math.round(wa.y + wa.height - 120), width: w, height: h })
   win.setAlwaysOnTop(true, 'screen-saver')
-  win.setOpacity(1)
+  win.showInactive() // opaque window composites reliably; never steals focus
 }
 function showOverlay(state: 'recording' | 'transcribing') {
   paintOverlay(state)
 }
 function hideOverlay() {
   win?.webContents.send('state', 'idle')
-  win?.setOpacity(0)
+  win?.hide()
 }
 // Success confirmation: flash "Pegado ✓" briefly, then hide.
 function doneOverlay() {
@@ -275,8 +273,9 @@ function errorOverlay(msg: string) {
 }
 
 // Single instance: a second launch just focuses the running app (avoids
-// double-binding the port + global hotkey).
-if (!app.requestSingleInstanceLock()) {
+// double-binding the port + global hotkey). Skipped under test so the harness
+// can run its own instance alongside a dev app.
+if (process.env.NW_TEST !== '1' && !app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => showConfig())
@@ -291,7 +290,9 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     settings = loadSettings(DEFAULT_SETTINGS)
     let inputAuthedAtStart = true // non-mac: assume fine
-    if (process.platform === 'darwin') {
+    // Under test, skip the native permission prompts (they open blocking system
+    // dialogs) and the mic request.
+    if (process.platform === 'darwin' && process.env.NW_TEST !== '1') {
       try {
         await systemPreferences.askForMediaAccess('microphone')
       } catch {}
@@ -535,6 +536,41 @@ function getFrontApp(): Promise<string> {
   })
 }
 
+// Trigger pressed: validate preconditions, then start recording. Extracted so a
+// test harness can drive it without a real global keypress.
+function onTriggerDown() {
+  if (recording) return
+  // Fail loud, not silent: if the mic isn't granted, capture would just produce
+  // empty audio. Tell the user on the press instead. (Skipped under test, where
+  // the mic grant of the Electron test binary is non-deterministic.)
+  if (process.env.NW_TEST !== '1' && process.platform === 'darwin' &&
+      systemPreferences.getMediaAccessStatus('microphone') !== 'granted') {
+    errorOverlay('Falta permiso de micrófono — conécedelo en Ajustes')
+    return
+  }
+  // No key / no model => reject on the press. Don't start "listening" for a
+  // recording we can't transcribe.
+  const ready = transcribeReady()
+  if (!ready.ok) {
+    errorOverlay(ready.msg || 'No hay motor listo')
+    return
+  }
+  recording = true
+  pendingApp = ''
+  getFrontApp().then((a) => (pendingApp = a))
+  showOverlay('recording')
+  win?.webContents.send('start-recording')
+  console.log('recording...')
+}
+// Trigger released: stop recording, move to transcribing.
+function onTriggerUp() {
+  if (!recording) return
+  recording = false
+  showOverlay('transcribing')
+  win?.webContents.send('stop-recording')
+  console.log('stopped, transcribing...')
+}
+
 function setupHotkey() {
   uIOhook.on('keydown', (e) => {
     // Any delivered key proves Input Monitoring is granted (uiohook is live).
@@ -548,38 +584,44 @@ function setupHotkey() {
       console.log('[hotkey] trigger set to keycode', e.keycode)
       return
     }
-    if (e.keycode === settings.triggerKeycode && !recording) {
-      // Fail loud, not silent: if the mic isn't granted, capture would just
-      // produce empty audio. Tell the user on the press instead.
-      if (process.platform === 'darwin' &&
-          systemPreferences.getMediaAccessStatus('microphone') !== 'granted') {
-        errorOverlay('Falta permiso de micrófono — conécedelo en Ajustes')
-        return
-      }
-      // No key / no model => reject on the press. Don't start "listening" for a
-      // recording we can't transcribe.
-      const ready = transcribeReady()
-      if (!ready.ok) {
-        errorOverlay(ready.msg || 'No hay motor listo')
-        return
-      }
-      recording = true
-      pendingApp = ''
-      getFrontApp().then((a) => (pendingApp = a))
-      showOverlay('recording')
-      win?.webContents.send('start-recording')
-      console.log('recording...')
-    }
+    if (e.keycode === settings.triggerKeycode) onTriggerDown()
   })
   uIOhook.on('keyup', (e) => {
-    if (e.keycode === settings.triggerKeycode && recording) {
-      recording = false
-      showOverlay('transcribing')
-      win?.webContents.send('stop-recording')
-      console.log('stopped, transcribing...')
-    }
+    if (e.keycode === settings.triggerKeycode) onTriggerUp()
   })
   uIOhook.start()
+  installTestHooks()
+}
+
+// Env-gated test surface (NW_TEST=1 only): lets the Playwright harness drive the
+// hotkey path and read overlay state via electronApp.evaluate(), with no OS-level
+// key injection or screenshots. Never present in production.
+function installTestHooks() {
+  if (process.env.NW_TEST !== '1') return
+  ;(global as any).__nwTest = {
+    triggerDown: () => onTriggerDown(),
+    triggerUp: () => onTriggerUp(),
+    armCapture: () => { captureHotkey = true },
+    // Simulate uiohook delivering a key while capture is armed.
+    pressKey: (keycode: number) => {
+      hotkeyEverReceived = true
+      if (captureHotkey) {
+        captureHotkey = false
+        settings = { ...settings, triggerKeycode: keycode }
+        saveSettings(settings)
+      } else if (keycode === settings.triggerKeycode) onTriggerDown()
+    },
+    releaseKey: (keycode: number) => { if (keycode === settings.triggerKeycode) onTriggerUp() },
+    overlayState: () => ({
+      opacity: win && !win.isDestroyed() ? win.getOpacity() : -1,
+      visible: win && !win.isDestroyed() ? win.isVisible() : false,
+      recording,
+    }),
+    settings: () => settings,
+    setRecordingDone: () => { doneOverlay() },
+    hideOverlay: () => hideOverlay(),
+  }
+  console.log('[test] hooks installed (NW_TEST=1)')
 }
 
 // macOS creates the keyboard event tap when uIOhook.start() runs. If Input

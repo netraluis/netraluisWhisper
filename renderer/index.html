@@ -4,41 +4,30 @@
     <meta charset="utf-8" />
     <title>netraluisWhisper</title>
     <style>
+      /* The OPAQUE window itself is the pill (backgroundColor #141416 in main).
+         The body fills it; the window's rounded corners give the pill shape. */
       html, body {
         margin: 0;
         height: 100%;
         background: transparent;
         overflow: hidden;
+        color: #fff;
         font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 13px;
+        font-weight: 500;
         -webkit-user-select: none;
         cursor: default;
       }
-      /* Hidden until a real state class lands, so a freshly-shown window never
-         flashes the default "Escuchando…" text (e.g. on an instant rejection). */
-      #pill { display: none; }
-      body.recording #pill, body.transcribing #pill,
-      body.done #pill, body.error #pill {
+      #bar {
+        height: 100%;
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 10px;
-        margin: 12px auto;
-        width: fit-content;
-        max-width: 216px;
-        padding: 10px 16px;
-        border-radius: 999px;
-        background: rgba(20, 20, 22, 0.92);
-        color: #fff;
-        font-size: 13px;
-        font-weight: 500;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-        backdrop-filter: blur(12px);
+        padding: 0 18px;
+        box-sizing: border-box;
       }
-      #dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        flex: none;
-      }
+      #dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: #666; }
       /* recording: pulsing red */
       body.recording #dot { background: #ff453a; animation: pulse 1s infinite; }
       /* transcribing: spinner */
@@ -48,28 +37,32 @@
         border-top-color: #fff;
         animation: spin 0.7s linear infinite;
       }
-      /* done: solid sand dot (label carries the ✓) */
       body.done #dot { background: #F4B860; }
-      /* error: solid red dot + message */
       body.error #dot { background: #ff453a; }
-      body.error #pill { max-width: 280px; }
       @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
       @keyframes spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
-    <div id="pill"><span id="dot"></span><span id="label">Escuchando…</span></div>
+    <div id="bar"><span id="dot"></span><span id="label"></span></div>
     <script src="./recorder.js"></script>
     <script>
-      const { ipcRenderer } = require('electron')
-      const label = document.getElementById('label')
-      ipcRenderer.on('state', (_e, state, msg) => {
-        document.body.className = state
-        if (state === 'recording') label.textContent = 'Escuchando…'
-        else if (state === 'transcribing') label.textContent = 'Convirtiendo tu voz…'
-        else if (state === 'done') label.textContent = 'Pegado ✓'
-        else if (state === 'error') label.textContent = msg || 'Error'
-      })
+      // IIFE so our `const`s don't collide with recorder.js's top-level
+      // `const { ipcRenderer }` — classic scripts share one global scope, and a
+      // redeclaration would throw a SyntaxError that silently kills this whole
+      // script (which is what stopped the overlay from ever showing a state).
+      (function () {
+        const { ipcRenderer } = require('electron')
+        const label = document.getElementById('label')
+        ipcRenderer.on('state', (_e, state, msg) => {
+          document.body.className = state
+          if (state === 'recording') label.textContent = 'Escuchando…'
+          else if (state === 'transcribing') label.textContent = 'Convirtiendo tu voz…'
+          else if (state === 'done') label.textContent = 'Pegado ✓'
+          else if (state === 'error') label.textContent = msg || 'Error'
+          else label.textContent = ''
+        })
+      })()
     </script>
   </body>
 </html>
