@@ -478,6 +478,7 @@ async function startWebUi() {
       }
     },
     startHotkeyCapture: () => { captureHotkey = true },
+    getHotkeyStatus: () => ({ capturing: captureHotkey, keycode: settings.triggerKeycode }),
     openPrivacyPane: (pane) => openPrivacyPane(pane),
     getUpdate: () => ({
       current: app.getVersion(),

@@ -337,23 +337,26 @@
         await fetch('/api/hotkey/capture', { method: 'POST' })
         lbl.textContent = 'Pulsa una tecla…'
         btn.disabled = true
+        // Poll the capture STATE, not the keycode: 'capturing' flips false as
+        // soon as a key is grabbed, so it works even when you re-pick the same
+        // key (a keycode-diff check would hang until timeout there).
         let tries = 0
         const poll = setInterval(async () => {
           tries++
-          const s = await fetch('/api/settings').then((r) => r.json()).catch(() => null)
-          const kc = s?.settings?.triggerKeycode
-          if (kc != null && kc !== currentKeycode) {
-            currentKeycode = kc
-            lbl.textContent = keyLabel(kc)
+          const st = await fetch('/api/hotkey/status').then((r) => r.json()).catch(() => null)
+          if (st && st.capturing === false) {
+            currentKeycode = st.keycode
+            lbl.textContent = keyLabel(st.keycode)
             btn.disabled = false
             clearInterval(poll)
             toast('Tecla actualizada')
-          } else if (tries > 20) {
+          } else if (tries > 40) { // ~14s then give up
             lbl.textContent = keyLabel(currentKeycode)
             btn.disabled = false
             clearInterval(poll)
+            toast('No se detectó ninguna tecla')
           }
-        }, 500)
+        }, 350)
       }
 
       // --- API key (cloud) ---

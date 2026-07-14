@@ -25,6 +25,7 @@ export interface ServerApi {
   getModelStatus: () => ModelStatus
   getPermissions: () => { microphone: string; accessibility: string; inputMonitoring: string }
   startHotkeyCapture: () => void
+  getHotkeyStatus: () => { capturing: boolean; keycode: number }
   openPrivacyPane: (pane: string) => void
   getUpdate: () => { current: string; updateAvailable: boolean; latest: string; url: string }
   openReleasePage: () => void
@@ -113,6 +114,9 @@ export function startServer(port: number, api: ServerApi): Promise<number> {
     api.startHotkeyCapture()
     res.json({ ok: true })
   })
+  // Poll capture state: capturing flips false once a key is grabbed, even if the
+  // new key equals the old one (a keycode-diff check would hang forever there).
+  server.get('/api/hotkey/status', (_req, res) => res.json(api.getHotkeyStatus()))
 
   server.post('/api/open-privacy', (req, res) => {
     api.openPrivacyPane(String(req.body?.pane || ''))
