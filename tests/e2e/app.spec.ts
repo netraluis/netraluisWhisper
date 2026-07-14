@@ -92,7 +92,9 @@ test('pressing the key with NO key/model shows an error, does NOT record', async
   expect(s.recording).toBe(false)     // never started recording
   expect(s.visible).toBe(true)           // overlay is shown...
   await expect.poll(overlayClass).toBe('error') // ...with the error state (DOM update is async)
+  // Releasing the key dismisses the error immediately (no waiting out the timeout).
   await triggerUp()
+  await expect.poll(async () => (await overlayState()).visible).toBe(false)
 })
 
 test('pressing the key WITH a key records, then transcribes', async () => {

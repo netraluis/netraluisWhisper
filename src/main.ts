@@ -264,19 +264,29 @@ function paintOverlay(state: string, msg?: string) {
 function showOverlay(state: 'recording' | 'transcribing') {
   paintOverlay(state)
 }
+let overlayTimer: ReturnType<typeof setTimeout> | null = null
+let errorActive = false // a press-time rejection error is on screen
+function clearOverlayTimer() { if (overlayTimer) { clearTimeout(overlayTimer); overlayTimer = null } }
 function hideOverlay() {
+  clearOverlayTimer()
+  errorActive = false
   win?.webContents.send('state', 'idle')
   win?.hide()
 }
 // Success confirmation: flash "Pegado ✓" briefly, then hide.
 function doneOverlay() {
+  errorActive = false
   paintOverlay('done')
-  setTimeout(() => hideOverlay(), 950)
+  clearOverlayTimer()
+  overlayTimer = setTimeout(() => hideOverlay(), 950)
 }
-// Hard-stop, visible: flash the reason in the pill, then hide.
+// Hard-stop, visible: flash the reason in the pill. Auto-hides after a few
+// seconds, but onTriggerUp dismisses it the moment the user lets go of the key.
 function errorOverlay(msg: string) {
   paintOverlay('error', msg)
-  setTimeout(() => hideOverlay(), 2800)
+  errorActive = true
+  clearOverlayTimer()
+  overlayTimer = setTimeout(() => hideOverlay(), 2800)
 }
 
 // Single instance: a second launch just focuses the running app (avoids
@@ -571,7 +581,12 @@ function onTriggerDown() {
 }
 // Trigger released: stop recording, move to transcribing.
 function onTriggerUp() {
-  if (!recording) return
+  if (!recording) {
+    // A rejection error (no key/model/mic) was shown on the press — dismiss it
+    // the instant the user lets go instead of leaving it up for the timeout.
+    if (errorActive) hideOverlay()
+    return
+  }
   recording = false
   showOverlay('transcribing')
   win?.webContents.send('stop-recording')
