@@ -1,6 +1,6 @@
 {
   "name": "netraluiswhisper",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Local push-to-talk voice dictation for macOS (Wispr Flow style).",
   "main": "dist/main.js",
   "scripts": {
@@ -46,7 +46,7 @@
       "identity": null,
       "category": "public.app-category.productivity",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "netraluisWhisper necesita el micrófono para transcribir tu voz.",
+        "NSMicrophoneUsageDescription": "netraluisWhisper necesita el micr\u00f3fono para transcribir tu voz.",
         "NSAppleEventsUsageDescription": "netraluisWhisper usa Apple Events para pegar el texto transcrito en la app activa."
       }
     },
